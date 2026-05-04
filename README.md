@@ -78,9 +78,7 @@ You can also start it later with:
 - `/start` connects your authorized account.
 - `/projects` opens the project picker.
 - `/sessions` opens the session picker for the current project.
-- `/records` exports the selected Codex Desktop thread as a full bubble-style HTML transcript.
-- `/history` is the same as `/records` by default, so it sends an attachment instead of long text.
-- `/history text` sends recent text-only history.
+- `/history` exports the selected Codex Desktop thread as a full bubble-style HTML transcript.
 - `/new Title` creates a new session in the current project.
 - `/rename Title` renames the current session.
 - `/status` shows the active project, session, and model.
@@ -144,8 +142,7 @@ conversation when resumed.
 When a Codex thread is selected, Pocket Codex attaches a bubble-style HTML transcript so
 desktop and mobile history can be reviewed in one place. The export embeds thumbnails for
 images found in the Codex rollout, including screenshots you sent to Codex and generated
-images saved locally by Codex. You can request the transcript again with `/records` or
-`/history`; use `/history text` only when you want recent text in the Telegram chat.
+images saved locally by Codex. You can request the transcript again with `/history`.
 
 ## Development
 

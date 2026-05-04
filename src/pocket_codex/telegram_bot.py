@@ -54,7 +54,6 @@ class PocketCodexTelegramBot:
         app.add_handler(CommandHandler("projects", self.projects))
         app.add_handler(CommandHandler("sessions", self.sessions))
         app.add_handler(CommandHandler("history", self.history))
-        app.add_handler(CommandHandler("records", self.records))
         app.add_handler(CommandHandler("new", self.new_session))
         app.add_handler(CommandHandler("rename", self.rename_session))
         app.add_handler(CommandHandler("status", self.status))
@@ -83,9 +82,7 @@ class PocketCodexTelegramBot:
                     "可用命令：",
                     "/projects - 选择项目",
                     "/sessions - 选择当前项目里的 Codex 桌面会话",
-                    "/records - 提取完整对话记录，发送气泡版 HTML 附件",
-                    "/history - 同 /records，不刷屏发送长文本",
-                    "/history text - 发送最近纯文本历史",
+                    "/history - 提取完整对话记录，发送气泡版 HTML 附件",
                     "/new 标题 - 新建会话",
                     "/rename 标题 - 重命名当前会话",
                     "/status - 查看当前项目和会话",
@@ -140,37 +137,6 @@ class PocketCodexTelegramBot:
         await self._send_session_picker(update, project_id=state.project_id)
 
     async def history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if not await self._require_authorized(update):
-            return
-        state = await self._ensure_state(update)
-        session = self.repository.get_session(state.session_id)
-        if session is None:
-            await update.effective_message.reply_text("当前没有选中的会话。")
-            return
-
-        mode = context.args[0].lower() if context.args else ""
-        inline_recent = mode in {"text", "recent"} or mode.isdigit()
-        attach_full = not inline_recent
-        limit = self.settings.telegram_history_on_open_messages
-        numeric_arg = next((arg for arg in context.args if arg.isdigit()), None)
-        if numeric_arg:
-            limit = max(
-                1,
-                min(
-                    int(numeric_arg),
-                    self.settings.telegram_history_export_max_messages,
-                ),
-            )
-
-        await self._send_session_history(
-            update.effective_message,
-            session=session,
-            limit=limit,
-            attach_full=attach_full,
-            inline_recent=inline_recent,
-        )
-
-    async def records(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
             return
         state = await self._ensure_state(update)

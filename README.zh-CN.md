@@ -77,9 +77,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 - `/start` 连接已授权账号。
 - `/projects` 打开项目选择器。
 - `/sessions` 打开当前项目的会话选择器。
-- `/records` 提取当前 Codex 桌面端会话的完整气泡样式 HTML 历史导出。
-- `/history` 同 `/records`，默认发附件，不在聊天里刷长文本。
-- `/history text` 发送最近纯文本历史。
+- `/history` 提取当前 Codex 桌面端会话的完整气泡样式 HTML 历史导出。
 - `/new Title` 在当前项目中新建会话。
 - `/rename Title` 重命名当前会话。
 - `/status` 查看当前项目、会话和模型。
@@ -139,8 +137,8 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 
 选择 Codex 会话时，Pocket Codex 会发送一份左右气泡样式的 HTML 历史文件，方便在手机上
 查看电脑端和手机端的完整上下文。导出文件会把 Codex rollout 里的图片转成内嵌缩略图，
-包括你发给 Codex 的截图和已经落盘的 Codex 生成图。之后可以用 `/records` 或 `/history`
-重新获取导出文件；只有想在 Telegram 聊天里查看最近纯文本时，才用 `/history text`。
+包括你发给 Codex 的截图和已经落盘的 Codex 生成图。之后可以用 `/history`
+重新获取导出文件。
 
 ## 开发
 

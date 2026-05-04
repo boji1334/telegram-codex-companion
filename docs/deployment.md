@@ -95,8 +95,7 @@ When sync is enabled:
 - Codex Desktop can inherit mobile messages after reopening the thread.
 - Selecting a thread in Telegram sends a bubble-style HTML transcript export.
 - The HTML transcript embeds mobile-friendly image thumbnails from Codex history.
-- `/records` and `/history` resend the full HTML transcript.
-- `/history text` sends recent text-only history.
+- `/history` resends the full HTML transcript.
 
 ## 6. First Run
 
@@ -153,9 +152,7 @@ that thread.
 Useful commands:
 
 - `/status` shows current project, session, and model.
-- `/records` sends the full HTML transcript.
-- `/history` also sends the HTML transcript by default.
-- `/history text` sends recent text-only history.
+- `/history` sends the full HTML transcript.
 - `/projects` switches project.
 - `/sessions` switches Codex thread.
 - `/exit` exits the current conversation; plain text `exit`, `退出`, or `退出对话`
@@ -196,8 +193,7 @@ If Codex Desktop does not show Telegram messages:
 
 If the history view is too long:
 
-- Use `/records` or `/history` for the HTML file.
-- Use `/history text` only when you need recent text in the Telegram chat.
+- Use `/history` for the HTML file.
 - Lower `TELEGRAM_HISTORY_ON_OPEN_MESSAGES` or `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES`.
 
 ## 10. Files That Must Stay Private
