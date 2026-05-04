@@ -60,6 +60,10 @@ class CodexStore:
         return _thread_from_row(row) if row else None
 
     def recent_messages(self, *, thread_id: str, limit: int) -> list[MessageRecord]:
+        messages = self.messages(thread_id=thread_id)
+        return messages[-limit:]
+
+    def messages(self, *, thread_id: str, limit: int | None = None) -> list[MessageRecord]:
         thread = self.get_thread(thread_id)
         if thread is None or not thread.rollout_path.exists():
             return []
@@ -70,7 +74,7 @@ class CodexStore:
                 record = self._message_from_line(line)
                 if record:
                     messages.append(record)
-        return messages[-limit:]
+        return messages[-limit:] if limit is not None else messages
 
     def append_exchange(self, *, thread_id: str, user_text: str, assistant_text: str) -> None:
         thread = self.get_thread(thread_id)

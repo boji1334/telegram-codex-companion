@@ -34,6 +34,8 @@ class Settings:
     allowed_user_ids: frozenset[int]
     setup_token: str | None
     max_history_messages: int
+    telegram_history_on_open_messages: int
+    telegram_history_export_max_messages: int
     codex_sync_enabled: bool
     codex_home: Path
 
@@ -65,6 +67,16 @@ def load_settings() -> Settings:
         allowed_user_ids=frozenset(_int_set_env("TELEGRAM_ALLOWED_USER_IDS")),
         setup_token=_optional("BOT_SETUP_TOKEN"),
         max_history_messages=_int_env("MAX_HISTORY_MESSAGES", default=24, minimum=4),
+        telegram_history_on_open_messages=_int_env(
+            "TELEGRAM_HISTORY_ON_OPEN_MESSAGES",
+            default=30,
+            minimum=1,
+        ),
+        telegram_history_export_max_messages=_int_env(
+            "TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES",
+            default=1000,
+            minimum=50,
+        ),
         codex_sync_enabled=_bool_env("CODEX_SYNC_ENABLED", default=True),
         codex_home=Path(
             os.getenv("CODEX_HOME", Path.home() / ".codex")

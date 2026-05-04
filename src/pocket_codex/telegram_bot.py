@@ -18,7 +18,7 @@ from telegram.ext import (
 from .codex_store import CodexStore
 from .config import Settings
 from .openai_responder import OpenAIResponder
-from .repository import Repository
+from .repository import MessageRecord, Repository
 from .text import chunk_text, compact_label
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class PocketCodexTelegramBot:
         app.add_handler(CommandHandler("claim", self.claim))
         app.add_handler(CommandHandler("projects", self.projects))
         app.add_handler(CommandHandler("sessions", self.sessions))
+        app.add_handler(CommandHandler("history", self.history))
         app.add_handler(CommandHandler("new", self.new_session))
         app.add_handler(CommandHandler("rename", self.rename_session))
         app.add_handler(CommandHandler("status", self.status))
@@ -116,6 +117,33 @@ class PocketCodexTelegramBot:
             return
         state = await self._ensure_state(update)
         await self._send_session_picker(update, project_id=state.project_id)
+
+    async def history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._require_authorized(update):
+            return
+        state = await self._ensure_state(update)
+        session = self.repository.get_session(state.session_id)
+        if session is None:
+            await update.effective_message.reply_text("当前没有选中的会话。")
+            return
+
+        attach_full = bool(context.args and context.args[0].lower() == "all")
+        limit = self.settings.telegram_history_on_open_messages
+        if context.args and context.args[0].isdigit():
+            limit = max(
+                1,
+                min(
+                    int(context.args[0]),
+                    self.settings.telegram_history_export_max_messages,
+                ),
+            )
+
+        await self._send_session_history(
+            update.effective_message,
+            session=session,
+            limit=limit,
+            attach_full=attach_full,
+        )
 
     async def new_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
@@ -196,6 +224,12 @@ class PocketCodexTelegramBot:
                 project_id=state.project_id,
                 codex_thread_id=thread.id,
                 title=thread.title,
+            )
+            await self._send_session_history(
+                query.message,
+                session=session,
+                limit=self.settings.telegram_history_on_open_messages,
+                attach_full=True,
             )
             await query.edit_message_text(
                 f"已连接 Codex 会话：{session.title}\n"
@@ -308,6 +342,77 @@ class PocketCodexTelegramBot:
             "选择会话：",
             reply_markup=self._session_markup(update.effective_user.id, project_id),
         )
+
+    async def _send_session_history(
+        self,
+        message,
+        *,
+        session,
+        limit: int,
+        attach_full: bool,
+    ) -> None:
+        if not session.codex_thread_id or not self.codex_store:
+            await message.reply_text("这个会话还没有连接 Codex 桌面历史。")
+            return
+
+        recent = self.codex_store.recent_messages(
+            thread_id=session.codex_thread_id,
+            limit=limit,
+        )
+        if not recent:
+            await message.reply_text("这个 Codex 会话暂时没有可加载的历史。")
+            return
+
+        title = f"已加载 Codex 历史：{session.title}"
+        body = self._format_transcript(recent)
+        for chunk in chunk_text(f"{title}\n最近 {len(recent)} 条：\n\n{body}", limit=3500):
+            await message.reply_text(chunk)
+
+        if attach_full:
+            full_messages = self.codex_store.messages(
+                thread_id=session.codex_thread_id,
+                limit=self.settings.telegram_history_export_max_messages,
+            )
+            export_path = self._write_history_export(
+                session_title=session.title,
+                thread_id=session.codex_thread_id,
+                messages=full_messages,
+            )
+            caption = f"完整历史导出：{session.title}（{len(full_messages)} 条）"
+            with export_path.open("rb") as file:
+                await message.reply_document(
+                    document=file,
+                    filename=export_path.name,
+                    caption=caption,
+                )
+
+    def _write_history_export(
+        self,
+        *,
+        session_title: str,
+        thread_id: str,
+        messages: list[MessageRecord],
+    ) -> Path:
+        export_dir = self.settings.data_dir / "exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        export_path = export_dir / f"codex-history-{thread_id}.md"
+        export_path.write_text(
+            f"# {session_title}\n\n" + self._format_transcript(messages),
+            encoding="utf-8",
+        )
+        return export_path
+
+    @staticmethod
+    def _format_transcript(messages: list[MessageRecord]) -> str:
+        blocks: list[str] = []
+        for index, record in enumerate(messages, start=1):
+            label = "Codex" if record.role == "assistant" else "你（电脑）"
+            content = record.content.strip()
+            if record.role == "user" and content.startswith("[Telegram]\n"):
+                label = "你（手机）"
+                content = content.removeprefix("[Telegram]\n").strip()
+            blocks.append(f"## {index}. {label}\n{content}")
+        return "\n\n".join(blocks)
 
     def _session_markup(self, user_id: int, project_id: str) -> InlineKeyboardMarkup:
         project = self.repository.get_project(project_id)

@@ -74,6 +74,8 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 - `/start` 连接已授权账号。
 - `/projects` 打开项目选择器。
 - `/sessions` 打开当前项目的会话选择器。
+- `/history` 从当前 Codex 桌面端会话加载最近历史。
+- `/history all` 发送当前会话的完整 Markdown 历史导出。
 - `/new Title` 在当前项目中新建会话。
 - `/rename Title` 重命名当前会话。
 - `/status` 查看当前项目、会话和模型。
@@ -96,6 +98,8 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 | `POCKET_CODEX_DATA_DIR` | 可选 | 默认是 `./data`。 |
 | `POCKET_CODEX_PROJECTS_FILE` | 可选 | 默认是 `./config/projects.json`。 |
 | `MAX_HISTORY_MESSAGES` | 可选 | 默认是 `24`。 |
+| `TELEGRAM_HISTORY_ON_OPEN_MESSAGES` | 可选 | 打开 Codex 会话时内联发送的最近消息数，默认是 `30`。 |
+| `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES` | 可选 | Markdown 历史导出的最大消息数，默认是 `1000`。 |
 | `CODEX_SYNC_ENABLED` | 可选 | 默认是 `true`。 |
 | `CODEX_HOME` | 可选 | 默认是当前用户的 `.codex` 目录。 |
 
@@ -124,6 +128,9 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 开启 Codex 同步后，`/sessions` 会优先列出所选项目路径匹配的 Codex 桌面端会话。
 通过 Telegram 发送的新消息会带着 `[Telegram]` 标记追加到选中的 Codex rollout 文件，
 这样桌面端恢复这条会话时可以继承手机端的上下文。
+
+选择 Codex 会话时，Pocket Codex 会把最近历史发送回 Telegram，并附带一份 Markdown
+完整历史导出。之后也可以用 `/history` 重新加载最近历史，或用 `/history all` 重新获取导出文件。
 
 ## 开发
 
