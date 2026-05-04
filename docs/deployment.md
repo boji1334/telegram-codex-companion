@@ -161,9 +161,9 @@ Useful commands:
 - `/exit` exits the current conversation; plain text `exit`, `退出`, or `退出对话`
   works too. Send `/start`, `/projects`, or `/sessions` to enter again.
 
-When you send a normal message, the bot posts a small waiting status and updates
-the elapsed time until the model reply is ready. Model replies render common
-Markdown as Telegram rich text instead of showing raw Markdown markers.
+When you send a normal message, the bot posts a small animated waiting status
+until the model reply is ready. Model replies render common Markdown as Telegram
+rich text instead of showing raw Markdown markers.
 
 ## 8. Windows Always-On Setup
 

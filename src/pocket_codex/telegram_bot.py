@@ -43,6 +43,7 @@ class WaitIndicator:
     message: object
     task: asyncio.Task
     started_at: float
+    model: str
 
 
 class PocketCodexTelegramBot:
@@ -466,14 +467,19 @@ class PocketCodexTelegramBot:
                 started_at=started_at,
             )
         )
-        return WaitIndicator(message=wait_message, task=task, started_at=started_at)
+        return WaitIndicator(
+            message=wait_message,
+            task=task,
+            started_at=started_at,
+            model=model,
+        )
 
     async def _finish_wait_indicator(self, indicator: WaitIndicator, text: str) -> None:
         indicator.task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await indicator.task
         with contextlib.suppress(Exception):
-            await indicator.message.edit_text(text)
+            await indicator.message.delete()
 
     @staticmethod
     async def _reply_html(message, html: str) -> None:
@@ -833,20 +839,22 @@ async def _run_wait_indicator(
     model: str,
     started_at: float,
 ) -> None:
+    frame = 0
     while True:
         await asyncio.sleep(WAIT_MESSAGE_UPDATE_SECONDS)
-        elapsed = int(monotonic() - started_at)
+        frame = (frame + 1) % 3
         with contextlib.suppress(Exception):
             await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
         try:
-            await wait_message.edit_text(_wait_text(model=model, elapsed_seconds=elapsed))
+            await wait_message.edit_text(_wait_text(model=model, frame=frame))
         except BadRequest as exc:
             if "Message is not modified" not in str(exc):
                 logger.debug("Could not update wait indicator: %s", exc)
 
 
-def _wait_text(*, model: str, elapsed_seconds: int) -> str:
-    return f"Codex 正在思考...\n已等待 {elapsed_seconds} 秒\n模型：{model}"
+def _wait_text(*, model: str, frame: int = 0) -> str:
+    dots = "." * (frame + 1)
+    return f"Codex 正在思考{dots}\n模型：{model}"
 
 
 def _elapsed_seconds(indicator: WaitIndicator) -> int:
