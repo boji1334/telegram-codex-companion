@@ -25,6 +25,7 @@ class Settings:
     telegram_bot_token: str
     openai_api_key: str
     openai_model: str
+    openai_base_url: str | None
     openai_store: bool
     data_dir: Path
     database_path: Path
@@ -55,6 +56,7 @@ def load_settings() -> Settings:
         telegram_bot_token=telegram_bot_token,
         openai_api_key=openai_api_key,
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+        openai_base_url=_optional("OPENAI_BASE_URL"),
         openai_store=_bool_env("OPENAI_STORE", default=False),
         data_dir=data_dir,
         database_path=database_path,

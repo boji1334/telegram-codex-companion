@@ -91,6 +91,7 @@ Environment variables:
 | `TELEGRAM_ALLOWED_USER_IDS` | Recommended | Comma-separated Telegram user ids allowed to use the bot. |
 | `BOT_SETUP_TOKEN` | Optional | A private token for first-time `/claim`. |
 | `OPENAI_MODEL` | Optional | Defaults to `gpt-5.4-mini`. |
+| `OPENAI_BASE_URL` | Optional | OpenAI-compatible API base URL for gateways or proxies. |
 | `OPENAI_STORE` | Optional | Defaults to `false`; history is stored locally in SQLite. |
 | `POCKET_CODEX_DATA_DIR` | Optional | Defaults to `./data`. |
 | `POCKET_CODEX_PROJECTS_FILE` | Optional | Defaults to `./config/projects.json`. |

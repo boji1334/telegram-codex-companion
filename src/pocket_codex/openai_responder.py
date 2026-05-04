@@ -9,7 +9,10 @@ from .repository import MessageRecord
 class OpenAIResponder:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = AsyncOpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
+        )
 
     async def reply(
         self,
