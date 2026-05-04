@@ -12,6 +12,7 @@ Pocket Codex should stay useful as a daily tool before it grows ambitious.
 
 ## Version 0.2
 
+- Finer-grained command authorization for `/run` and `/ssh`.
 - Explicit file commands, such as `/read path/to/file.py`.
 - Project search over allowlisted folders.
 - Per-project prompt presets.
@@ -30,4 +31,3 @@ Pocket Codex should stay useful as a daily tool before it grows ambitious.
 - Encrypted local database option.
 - Webhook deployment mode for cloud servers.
 - Plugin interface for project tools.
-

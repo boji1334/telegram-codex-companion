@@ -18,6 +18,13 @@ class ProjectConfig:
     name: str
     path: Path | None = None
     system_prompt: str = ""
+    allow_shell: bool = False
+    ssh_target: str | None = None
+    ssh_remote_path: str | None = None
+    ssh_executable: Path | None = None
+    ssh_hostkey: str | None = None
+    ssh_password_env: str | None = None
+    ssh_password_file: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +46,10 @@ class Settings:
     telegram_history_export_max_messages: int
     codex_sync_enabled: bool
     codex_home: Path
+    command_execution_enabled: bool
+    command_timeout_seconds: int
+    command_output_max_chars: int
+    command_inline_max_chars: int
 
 
 def load_settings() -> Settings:
@@ -88,6 +99,22 @@ def load_settings() -> Settings:
         codex_home=Path(
             os.getenv("CODEX_HOME", Path.home() / ".codex")
         ).expanduser().resolve(),
+        command_execution_enabled=_bool_env("POCKET_CODEX_COMMANDS_ENABLED", default=False),
+        command_timeout_seconds=_int_env(
+            "POCKET_CODEX_COMMAND_TIMEOUT_SECONDS",
+            default=60,
+            minimum=5,
+        ),
+        command_output_max_chars=_int_env(
+            "POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS",
+            default=12000,
+            minimum=1000,
+        ),
+        command_inline_max_chars=_int_env(
+            "POCKET_CODEX_COMMAND_INLINE_MAX_CHARS",
+            default=3500,
+            minimum=1000,
+        ),
     )
     return settings
 
@@ -196,15 +223,42 @@ def _load_projects(path: Path) -> list[ProjectConfig]:
             if raw_path in (None, "")
             else Path(str(raw_path)).expanduser().resolve()
         )
+        raw_ssh_executable = raw.get("ssh_executable")
+        ssh_executable = (
+            None
+            if raw_ssh_executable in (None, "")
+            else Path(str(raw_ssh_executable)).expanduser().resolve()
+        )
+        raw_ssh_password_file = raw.get("ssh_password_file")
+        ssh_password_file = (
+            None
+            if raw_ssh_password_file in (None, "")
+            else Path(str(raw_ssh_password_file)).expanduser().resolve()
+        )
         projects.append(
             ProjectConfig(
                 id=project_id,
                 name=name,
                 path=project_path,
                 system_prompt=str(raw.get("system_prompt", "")).strip(),
+                allow_shell=bool(raw.get("allow_shell", False)),
+                ssh_target=_optional_project_string(raw, "ssh_target"),
+                ssh_remote_path=_optional_project_string(raw, "ssh_remote_path"),
+                ssh_executable=ssh_executable,
+                ssh_hostkey=_optional_project_string(raw, "ssh_hostkey"),
+                ssh_password_env=_optional_project_string(raw, "ssh_password_env"),
+                ssh_password_file=ssh_password_file,
             )
         )
 
     if not projects:
         raise ConfigError("At least one project must be configured.")
     return projects
+
+
+def _optional_project_string(raw: dict, key: str) -> str | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

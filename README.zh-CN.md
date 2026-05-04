@@ -15,7 +15,9 @@ Pocket Codex 是一个私有 Telegram 对话助手，用来在长期项目中和
 - 可选 Codex 桌面端同步：列出本机 Codex threads，读取历史，并把 Telegram
   对话追加回选中的 rollout。
 - 气泡样式 HTML 历史导出会内嵌图片缩略图，手机上可以看到你发送的截图和 Codex 生成图。
-- Telegram 回复会把常见 Markdown 转成富文本显示，并在等待模型时显示动态等待时间。
+- Telegram 回复会把常见 Markdown 转成富文本显示，并在等待模型时显示动态等待提示。
+- 可选受控命令入口：`/run` 读取当前项目本机目录，`/ssh` 读取项目配置的远程服务器，
+  输出会写入当前会话上下文，方便继续让模型分析日志和实验结果。
 - 使用 SQLite 在你自己的电脑上保存对话历史。
 - 支持用户白名单和首次 `/claim` 授权流程。
 - 使用 OpenAI Responses API 作为模型后端。
@@ -83,6 +85,8 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 - `/new Title` 在当前项目中新建会话。
 - `/rename Title` 重命名当前会话。
 - `/status` 查看当前项目、会话和模型。
+- `/run 命令` 在当前项目本机目录执行只读命令。
+- `/ssh 命令` 在当前项目配置的远程服务器执行只读命令。
 - `/exit` 退出当前对话，普通消息会暂停发送给模型。
 - `/whoami` 查看你的 Telegram user id。
 - `/claim token` 在配置了 `BOT_SETUP_TOKEN` 时授权当前账号。
@@ -111,6 +115,10 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 | `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES` | 可选 | HTML 历史导出的最大消息数，默认是 `1000`。 |
 | `CODEX_SYNC_ENABLED` | 可选 | 默认是 `true`。 |
 | `CODEX_HOME` | 可选 | 默认是当前用户的 `.codex` 目录。 |
+| `POCKET_CODEX_COMMANDS_ENABLED` | 可选 | 默认是 `false`。开启后仍需单个项目设置 `allow_shell=true`。 |
+| `POCKET_CODEX_COMMAND_TIMEOUT_SECONDS` | 可选 | `/run` 和 `/ssh` 超时秒数，默认是 `60`。 |
+| `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | 可选 | 写入会话上下文的最大输出字符数，默认是 `12000`。 |
+| `POCKET_CODEX_COMMAND_INLINE_MAX_CHARS` | 可选 | Telegram 单条命令输出分块大小，默认是 `3500`。 |
 
 项目配置示例：
 
@@ -126,13 +134,21 @@ Copy-Item .\config\projects.example.json .\config\projects.json
     "id": "steel_cxx",
     "name": "steel_cxx",
     "path": "C:/Users/you/Documents/steel_cxx",
-    "system_prompt": "This session is for the steel_cxx project."
+    "system_prompt": "This session is for the steel_cxx project.",
+    "allow_shell": false,
+    "ssh_target": "user@example.com",
+    "ssh_remote_path": "/srv/steel_cxx",
+    "ssh_executable": "ssh",
+    "ssh_hostkey": "",
+    "ssh_password_env": "STEEL_CXX_SSH_PASSWORD"
   }
 ]
 ```
 
-项目路径会作为项目元信息传给模型。第一版不会自动读取文件，这样安全边界更清楚。
-文件搜索和显式文件附件工具可以作为独立模块继续添加。
+项目路径会作为项目元信息传给模型。命令执行默认关闭；只有同时设置
+`POCKET_CODEX_COMMANDS_ENABLED=true` 和项目级 `allow_shell=true` 后，
+`/run`、`/ssh` 才能使用。命令入口按只读场景设计，会拦截删除、移动、安装、重启、
+Git 破坏性操作和输出重定向，并设置超时与输出截断。
 
 开启 Codex 同步后，`/sessions` 会优先列出所选项目路径匹配的 Codex 桌面端会话。
 通过 Telegram 发送的新消息会带着 `[Telegram]` 标记追加到选中的 Codex rollout 文件，
@@ -158,14 +174,15 @@ pytest
 - 如果偏好 `/claim` 流程，请使用足够长的随机 `BOT_SETUP_TOKEN`。
 - 家用部署建议保持轮询模式，除非你明确需要 webhook。
 - 项目目录通过 `config/projects.json` 白名单控制。
+- 如果开启 `/run` 或 `/ssh`，只给可信项目打开 `allow_shell=true`，不要把 SSH 密码提交到 Git。
 
 更多内容见 [docs/security.md](docs/security.md) 和 [docs/windows-startup.md](docs/windows-startup.md)。
 完整安装和部署流程见 [docs/deployment.md](docs/deployment.md)。
 
 ## 路线图
 
-见 [docs/roadmap.md](docs/roadmap.md)。下一步计划是支持在白名单项目目录中显式读取文件，
-之后加入 Telegram 语音消息支持。
+见 [docs/roadmap.md](docs/roadmap.md)。下一步计划是加入更细的命令授权策略和
+Telegram 语音消息支持。
 
 ## 发布
 

@@ -16,8 +16,11 @@ The default deployment does not need a public IP address or an exposed port.
   Telegram exchanges back to the selected rollout.
 - Bubble-style HTML history exports include embedded image thumbnails for screenshots
   you sent to Codex and generated images saved by Codex.
-- Telegram replies render common Markdown as rich text and show a live waiting timer
+- Telegram replies render common Markdown as rich text and show an animated waiting indicator
   while the model is responding.
+- Optional controlled command access: `/run` reads from the current local project folder,
+  `/ssh` reads from the project's configured remote server, and command output is saved
+  into the active conversation context for follow-up analysis.
 - SQLite conversation history stored on your own machine.
 - User allowlist and first-time `/claim` setup flow.
 - OpenAI Responses API backend.
@@ -85,6 +88,8 @@ You can also start it later with:
 - `/new Title` creates a new session in the current project.
 - `/rename Title` renames the current session.
 - `/status` shows the active project, session, and model.
+- `/run command` runs a read-only command in the active local project folder.
+- `/ssh command` runs a read-only command on the active project's configured remote server.
 - `/exit` exits the current conversation so plain text messages pause instead of
   being sent to the model.
 - `/whoami` shows your Telegram user id.
@@ -114,6 +119,10 @@ Environment variables:
 | `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES` | Optional | Max messages included in HTML history export. Defaults to `1000`. |
 | `CODEX_SYNC_ENABLED` | Optional | Defaults to `true`. |
 | `CODEX_HOME` | Optional | Defaults to the current user's `.codex` directory. |
+| `POCKET_CODEX_COMMANDS_ENABLED` | Optional | Defaults to `false`. Project-level `allow_shell=true` is also required. |
+| `POCKET_CODEX_COMMAND_TIMEOUT_SECONDS` | Optional | Timeout for `/run` and `/ssh`. Defaults to `60`. |
+| `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | Optional | Max command output saved into context. Defaults to `12000`. |
+| `POCKET_CODEX_COMMAND_INLINE_MAX_CHARS` | Optional | Telegram output chunk size. Defaults to `3500`. |
 
 Project config example:
 
@@ -129,14 +138,22 @@ Project config example:
     "id": "steel_cxx",
     "name": "steel_cxx",
     "path": "C:/Users/you/Documents/steel_cxx",
-    "system_prompt": "This session is for the steel_cxx project."
+    "system_prompt": "This session is for the steel_cxx project.",
+    "allow_shell": false,
+    "ssh_target": "user@example.com",
+    "ssh_remote_path": "/srv/steel_cxx",
+    "ssh_executable": "ssh",
+    "ssh_hostkey": "",
+    "ssh_password_env": "STEEL_CXX_SSH_PASSWORD"
   }
 ]
 ```
 
-The project path is included as project metadata. This first version does not read files
-automatically, which keeps the security boundary simple. File search and explicit file
-attachment tools can be added as separate modules.
+The project path is included as project metadata. Command execution is off by default:
+you must set both `POCKET_CODEX_COMMANDS_ENABLED=true` and project-level
+`allow_shell=true` before `/run` or `/ssh` work. The command runner is designed for
+read-only inspection, blocks destructive operations and output redirection, and uses
+timeouts plus output truncation.
 
 When Codex sync is enabled, `/sessions` prefers matching Codex Desktop threads for the
 selected project path. Messages sent through Telegram are appended to the selected Codex
@@ -163,6 +180,8 @@ pytest
 - Use a long random `BOT_SETUP_TOKEN` if you prefer the `/claim` flow.
 - Keep polling mode for home deployments unless you specifically need webhooks.
 - Project directories are allowlisted through `config/projects.json`.
+- If you enable `/run` or `/ssh`, only set `allow_shell=true` on trusted projects and
+  never commit SSH passwords.
 
 See [docs/security.md](docs/security.md) and [docs/windows-startup.md](docs/windows-startup.md).
 For a complete installation and deployment walkthrough, see
@@ -170,8 +189,8 @@ For a complete installation and deployment walkthrough, see
 
 ## Roadmap
 
-See [docs/roadmap.md](docs/roadmap.md). The intended next step is explicit file reading
-inside allowlisted project folders, followed by Telegram voice-message support.
+See [docs/roadmap.md](docs/roadmap.md). The intended next step is finer-grained command
+authorization, followed by Telegram voice-message support.
 
 ## Publishing
 

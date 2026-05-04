@@ -94,6 +94,27 @@ class CodexStore:
             for record in records:
                 file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
 
+        self._touch_thread(thread_id)
+
+    def append_user_note(self, *, thread_id: str, text: str) -> None:
+        thread = self.get_thread(thread_id)
+        if thread is None:
+            raise ValueError(f"Unknown Codex thread: {thread_id}")
+        if not thread.rollout_path.exists():
+            raise FileNotFoundError(thread.rollout_path)
+
+        now = _timestamp()
+        records = [
+            _message_record(now, "user", text, "input_text"),
+            _event_message(now, "user_message", text),
+        ]
+        with thread.rollout_path.open("a", encoding="utf-8", newline="\n") as file:
+            for record in records:
+                file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+        self._touch_thread(thread_id)
+
+    def _touch_thread(self, thread_id: str) -> None:
         unix_seconds = int(datetime.now(UTC).timestamp())
         unix_ms = int(datetime.now(UTC).timestamp() * 1000)
         with sqlite3.connect(self.state_db) as conn:

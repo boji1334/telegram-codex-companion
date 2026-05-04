@@ -80,7 +80,53 @@ Example:
 Project paths are allowlisted. Codex Desktop sync uses these paths to match
 Telegram projects to local Codex threads.
 
-## 5. Enable Codex Desktop Sync
+## 5. Optional: Enable Read-Only Commands And SSH
+
+Command execution is disabled by default. For a private, allowlisted deployment,
+you can turn it on in `.env`:
+
+```env
+POCKET_CODEX_COMMANDS_ENABLED=true
+POCKET_CODEX_COMMAND_TIMEOUT_SECONDS=60
+POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS=12000
+POCKET_CODEX_COMMAND_INLINE_MAX_CHARS=3500
+```
+
+Then enable it only for trusted projects in `config/projects.json`:
+
+```json
+{
+  "id": "steel_cxx",
+  "name": "steel_cxx",
+  "path": "D:/code/steel_cxx",
+  "system_prompt": "This session is for the steel_cxx project.",
+  "allow_shell": true,
+  "ssh_target": "user@example.com",
+  "ssh_remote_path": "/srv/steel_cxx",
+  "ssh_executable": "ssh",
+  "ssh_hostkey": "",
+  "ssh_password_env": "STEEL_CXX_SSH_PASSWORD"
+}
+```
+
+Daily examples:
+
+```text
+/ssh nvidia-smi
+/ssh tail -n 80 artifacts/server_logs/overnight_expand_fixed_gpu0.out
+/ssh find artifacts -type f | grep -E "step9|trend|result|metrics|summary" | wc -l
+/run Get-ChildItem -Recurse artifacts | Select-Object -Last 50
+```
+
+`/run` executes in the local project folder. `/ssh` executes `cd ssh_remote_path && command`
+on the remote host. Output is sent back to Telegram and saved into the active conversation,
+so the next message can ask the model to analyze it.
+
+The runner is intentionally read-only: it blocks common delete, move, install, permission,
+process-kill, reboot, destructive Git, and output-redirection commands. Treat this as a
+guardrail, not a sandbox; only enable it for a private bot and trusted projects.
+
+## 6. Enable Codex Desktop Sync
 
 Codex sync is enabled by default:
 
@@ -99,7 +145,7 @@ When sync is enabled:
 - `/history` resends the full HTML transcript.
 - `/model` changes the active GPT model for future replies.
 
-## 6. First Run
+## 7. First Run
 
 Validate configuration:
 
@@ -133,7 +179,7 @@ Restart the bot and send:
 /sessions
 ```
 
-## 7. Daily Use
+## 8. Daily Use
 
 Typical flow:
 
@@ -156,6 +202,8 @@ Useful commands:
 - `/status` shows current project, session, and model.
 - `/history` sends the full HTML transcript.
 - `/model` switches the active GPT model.
+- `/ssh` checks remote logs or GPU status for projects with SSH configured.
+- `/run` checks local project files on the always-on computer.
 - `/projects` switches project.
 - `/sessions` switches Codex thread.
 - `/exit` exits the current conversation; plain text `exit`, `退出`, or `退出对话`
@@ -165,7 +213,7 @@ When you send a normal message, the bot posts a small animated waiting status
 until the model reply is ready. Model replies render common Markdown as Telegram
 rich text instead of showing raw Markdown markers.
 
-## 8. Windows Always-On Setup
+## 9. Windows Always-On Setup
 
 For long-term use:
 
@@ -176,7 +224,7 @@ For long-term use:
 
 See [windows-startup.md](windows-startup.md) for startup options.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 If Telegram replies say the model call failed:
 
@@ -205,7 +253,17 @@ If the history view is too long:
 - Use `/history` for the HTML file.
 - Lower `TELEGRAM_HISTORY_ON_OPEN_MESSAGES` or `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES`.
 
-## 10. Files That Must Stay Private
+If `/ssh` fails:
+
+- Confirm the active project with `/status`.
+- Confirm `POCKET_CODEX_COMMANDS_ENABLED=true`.
+- Confirm the project has `allow_shell=true` and `ssh_target`.
+- If using OpenSSH, configure SSH keys or an agent because password prompts are disabled.
+- If using PuTTY `plink.exe`, set `ssh_executable`, optionally `ssh_hostkey`, and keep
+  the password in `.env` or another ignored local file.
+- Run the same SSH command once from PowerShell to verify host access.
+
+## 11. Files That Must Stay Private
 
 Do not commit:
 

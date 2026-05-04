@@ -32,7 +32,18 @@ authentication, logging, and rate limits.
 
 ## Project Access
 
-Project directories must be explicitly listed in `config/projects.json`. The first
-release includes project metadata in the prompt, but does not automatically read files.
-This makes the initial security boundary easier to audit.
+Project directories must be explicitly listed in `config/projects.json`.
 
+Command execution is disabled unless both of these are true:
+
+- `.env` contains `POCKET_CODEX_COMMANDS_ENABLED=true`.
+- The selected project contains `allow_shell=true`.
+
+`/run` and `/ssh` are intended for read-only inspection. The runner blocks common delete,
+move, copy, install, permission, process-kill, reboot, destructive Git, and output-redirection
+commands, and it enforces a timeout plus output truncation. This is a guardrail, not a full
+OS sandbox. Only enable command execution on a private bot, with numeric Telegram user-id
+allowlisting, for projects you trust.
+
+Keep SSH passwords in `.env`, an ignored local file, an SSH agent, or a private key store.
+Never commit passwords, tokens, private keys, `config/projects.json`, or command output logs.

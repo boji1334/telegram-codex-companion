@@ -55,6 +55,7 @@ class OpenAIResponder:
                 "When prior Codex Desktop history is provided, "
                 "treat it as the same ongoing conversation."
             ),
+            "When history includes [Command output], treat it as observed shell/SSH output.",
             f"Current project: {project_name}.",
         ]
         if project_path:

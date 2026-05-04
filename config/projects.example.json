@@ -9,7 +9,12 @@
     "id": "steel_cxx",
     "name": "steel_cxx",
     "path": "C:/Users/boji1/Documents/steel_cxx",
-    "system_prompt": "This session is for the steel_cxx project. Keep answers practical and project-aware."
+    "system_prompt": "This session is for the steel_cxx project. Keep answers practical and project-aware.",
+    "allow_shell": false,
+    "ssh_target": "",
+    "ssh_remote_path": "",
+    "ssh_executable": "",
+    "ssh_hostkey": "",
+    "ssh_password_env": ""
   }
 ]
-

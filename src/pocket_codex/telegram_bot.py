@@ -25,6 +25,13 @@ from telegram.ext import (
 )
 
 from .codex_store import CodexStore
+from .command_runner import (
+    CommandNotConfigured,
+    CommandRejected,
+    command_memory_block,
+    run_local_command,
+    run_ssh_command,
+)
 from .config import Settings
 from .openai_responder import OpenAIResponder
 from .repository import MessageRecord, Repository
@@ -71,6 +78,8 @@ class PocketCodexTelegramBot:
         app.add_handler(CommandHandler("new", self.new_session))
         app.add_handler(CommandHandler("rename", self.rename_session))
         app.add_handler(CommandHandler("status", self.status))
+        app.add_handler(CommandHandler("run", self.run_command))
+        app.add_handler(CommandHandler("ssh", self.ssh_command))
         app.add_handler(CommandHandler("exit", self.exit))
         app.add_handler(CallbackQueryHandler(self.on_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_message))
@@ -101,6 +110,8 @@ class PocketCodexTelegramBot:
                     "/new 标题 - 新建会话",
                     "/rename 标题 - 重命名当前会话",
                     "/status - 查看当前项目和会话",
+                    "/run 命令 - 在当前项目本机目录执行只读命令，并写入会话记忆",
+                    "/ssh 命令 - 在当前项目配置的远程服务器执行只读命令，并写入会话记忆",
                     "/exit - 退出当前对话，普通消息会暂停发送给模型",
                     "/whoami - 查看 Telegram user id",
                     "exit - 和 /exit 一样，可直接输入",
@@ -244,6 +255,16 @@ class PocketCodexTelegramBot:
             f"当前项目：{project_name}\n当前会话：{session_title}\n模型：{current_model}"
         )
 
+    async def run_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._require_authorized(update):
+            return
+        await self._execute_project_command(update, context=context, mode="local")
+
+    async def ssh_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._require_authorized(update):
+            return
+        await self._execute_project_command(update, context=context, mode="ssh")
+
     async def on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
             return
@@ -356,17 +377,19 @@ class PocketCodexTelegramBot:
                 thread_id=session.codex_thread_id,
                 limit=self.settings.max_history_messages,
             )
+            history_for_reply = history
         else:
             history = self.repository.recent_messages(
                 session_id=state.session_id,
                 limit=self.settings.max_history_messages,
             )
+            history_for_reply = history[:-1]
         try:
             answer = await self.responder.reply(
                 project_name=project["name"],
                 project_path=project["path"],
                 project_prompt=project["system_prompt"],
-                history=history[:-1],
+                history=history_for_reply,
                 user_message=message.text,
                 model=current_model,
             )
@@ -433,6 +456,127 @@ class PocketCodexTelegramBot:
         if state.selected_model in self.settings.openai_model_choices:
             return state.selected_model
         return self.settings.openai_model
+
+    async def _execute_project_command(
+        self,
+        update: Update,
+        *,
+        context: ContextTypes.DEFAULT_TYPE,
+        mode: str,
+    ) -> None:
+        message = update.effective_message
+        user = update.effective_user
+        if message is None or user is None or not message.text:
+            return
+
+        state = await self._ensure_state(update)
+        session = self.repository.get_session(state.session_id)
+        project = self._project_config(state.project_id)
+        if project is None:
+            await message.reply_text("当前项目配置不存在，请用 /projects 重新选择。")
+            return
+
+        command = _command_argument(message.text)
+        if not command:
+            usage = "/run nvidia-smi" if mode == "local" else "/ssh nvidia-smi"
+            await message.reply_text(f"用法：{usage}")
+            return
+        if not self.settings.command_execution_enabled:
+            await message.reply_text(
+                "命令执行入口还没有开启。\n"
+                "在 .env 设置 POCKET_CODEX_COMMANDS_ENABLED=true，"
+                "并在对应项目里设置 allow_shell=true 后再用。"
+            )
+            return
+        if not project.allow_shell:
+            await message.reply_text(
+                "当前项目没有开启命令执行。\n"
+                "请只给可信项目在 config/projects.json 中设置 allow_shell=true。"
+            )
+            return
+
+        self.repository.set_user_active(user_id=user.id, active=True)
+        progress = await message.reply_text(
+            "正在执行只读命令...\n"
+            "输出会发回 Telegram，并写入当前会话记忆，下一条消息可以直接让我分析。"
+        )
+        await context.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
+
+        try:
+            if mode == "local":
+                result = await run_local_command(
+                    project=project,
+                    command=command,
+                    timeout_seconds=self.settings.command_timeout_seconds,
+                    output_max_chars=self.settings.command_output_max_chars,
+                )
+            else:
+                result = await run_ssh_command(
+                    project=project,
+                    command=command,
+                    timeout_seconds=self.settings.command_timeout_seconds,
+                    output_max_chars=self.settings.command_output_max_chars,
+                )
+        except CommandRejected as exc:
+            await progress.edit_text(f"这条命令被安全策略拦截：{exc}")
+            return
+        except CommandNotConfigured as exc:
+            await progress.edit_text(str(exc))
+            return
+        except FileNotFoundError as exc:
+            logger.exception("Command executable was not found.")
+            await progress.edit_text(f"找不到命令执行程序：{exc}")
+            return
+        except Exception as exc:
+            logger.exception("Command execution failed.")
+            await progress.edit_text(f"命令执行失败：{type(exc).__name__}")
+            return
+
+        with contextlib.suppress(Exception):
+            await progress.delete()
+
+        memory = command_memory_block(result)
+        if session is not None:
+            self.repository.append_message(
+                session_id=session.id,
+                role="system",
+                content=memory,
+            )
+            if session.codex_thread_id and self.codex_store:
+                self.codex_store.append_user_note(
+                    thread_id=session.codex_thread_id,
+                    text=memory,
+                )
+
+        await self._send_command_result(message, result)
+
+    def _project_config(self, project_id: str):
+        for project in self.settings.projects:
+            if project.id == project_id:
+                return project
+        return None
+
+    async def _send_command_result(self, message, result) -> None:
+        status = "超时" if result.timed_out else f"退出码 {result.exit_code}"
+        title = "命令完成" if result.ok else "命令返回异常状态"
+        if result.truncated:
+            title += "（输出已截断）"
+        output = result.combined_output or "(no output)"
+        text = "\n".join(
+            [
+                title,
+                f"模式：{result.mode}",
+                f"位置：{result.location}",
+                f"命令：{result.command}",
+                f"状态：{status}",
+                f"用时：{result.duration_seconds:.1f}s",
+                "",
+                output,
+            ]
+        )
+        chunk_limit = min(self.settings.command_inline_max_chars, 3500)
+        for chunk in chunk_text(text, limit=chunk_limit):
+            await self._reply_html(message, f"<pre>{escape(chunk)}</pre>")
 
     def _model_markup(self, current_model: str) -> InlineKeyboardMarkup:
         buttons = []
@@ -818,6 +962,11 @@ def _short_image_ref(image_ref: str) -> str:
 
 def _is_exit_text(text: str) -> bool:
     return text.strip().casefold() in {"exit", "退出", "退出对话"}
+
+
+def _command_argument(text: str) -> str:
+    parts = text.strip().split(maxsplit=1)
+    return parts[1].strip() if len(parts) == 2 else ""
 
 
 async def _run_wait_indicator(

@@ -82,6 +82,29 @@ def test_codex_store_reads_and_appends_rollout_messages(tmp_path: Path) -> None:
     assert records[-1]["payload"]["phase"] == "final_answer"
 
 
+def test_codex_store_appends_user_note_for_command_output(tmp_path: Path) -> None:
+    codex_home = tmp_path / ".codex"
+    rollout_path = codex_home / "sessions" / "rollout.jsonl"
+    codex_home.mkdir()
+    rollout_path.parent.mkdir()
+    rollout_path.write_text("", encoding="utf-8")
+    _create_thread_db(codex_home, rollout_path, tmp_path)
+
+    store = CodexStore(codex_home)
+    store.append_user_note(thread_id="thread-1", text="[Command output]\nhello")
+
+    messages = store.recent_messages(thread_id="thread-1", limit=10)
+    assert messages[-1].role == "user"
+    assert messages[-1].content == "[Command output]\nhello"
+
+    records = [
+        json.loads(line)
+        for line in rollout_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert records[0]["payload"]["role"] == "user"
+    assert records[1]["payload"]["type"] == "user_message"
+
+
 def test_codex_store_backfills_existing_telegram_records(tmp_path: Path) -> None:
     codex_home = tmp_path / ".codex"
     rollout_path = codex_home / "sessions" / "rollout.jsonl"
