@@ -35,7 +35,7 @@ from .text import chunk_text, compact_label
 logger = logging.getLogger(__name__)
 MAX_HISTORY_IMAGE_SIDE = 1280
 HISTORY_IMAGE_JPEG_QUALITY = 82
-WAIT_MESSAGE_UPDATE_SECONDS = 5
+WAIT_MESSAGE_UPDATE_SECONDS = 1
 
 
 @dataclass
