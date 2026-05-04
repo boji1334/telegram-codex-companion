@@ -75,7 +75,7 @@ You can also start it later with:
 - `/projects` opens the project picker.
 - `/sessions` opens the session picker for the current project.
 - `/history` loads recent history from the selected Codex Desktop thread.
-- `/history all` sends a full Markdown transcript export for the selected thread.
+- `/history all` sends a full bubble-style HTML transcript export for the selected thread.
 - `/new Title` creates a new session in the current project.
 - `/rename Title` renames the current session.
 - `/status` shows the active project, session, and model.
@@ -99,7 +99,7 @@ Environment variables:
 | `POCKET_CODEX_PROJECTS_FILE` | Optional | Defaults to `./config/projects.json`. |
 | `MAX_HISTORY_MESSAGES` | Optional | Defaults to `24`. |
 | `TELEGRAM_HISTORY_ON_OPEN_MESSAGES` | Optional | Recent messages sent inline when opening a Codex thread. Defaults to `30`. |
-| `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES` | Optional | Max messages included in Markdown history export. Defaults to `1000`. |
+| `TELEGRAM_HISTORY_EXPORT_MAX_MESSAGES` | Optional | Max messages included in HTML history export. Defaults to `1000`. |
 | `CODEX_SYNC_ENABLED` | Optional | Defaults to `true`. |
 | `CODEX_HOME` | Optional | Defaults to the current user's `.codex` directory. |
 
@@ -131,9 +131,9 @@ selected project path. Messages sent through Telegram are appended to the select
 rollout file with a `[Telegram]` marker so the desktop thread can inherit the mobile
 conversation when resumed.
 
-When a Codex thread is selected, Pocket Codex sends recent history back into Telegram and
-attaches a Markdown transcript export. You can reload it later with `/history`, or request
-the transcript again with `/history all`.
+When a Codex thread is selected, Pocket Codex attaches a bubble-style HTML transcript so
+desktop and mobile history can be reviewed in one place. You can reload recent text later
+with `/history`, or request the transcript again with `/history all`.
 
 ## Development
 

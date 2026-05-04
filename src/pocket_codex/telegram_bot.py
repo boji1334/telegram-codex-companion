@@ -128,6 +128,7 @@ class PocketCodexTelegramBot:
             return
 
         attach_full = bool(context.args and context.args[0].lower() == "all")
+        inline_recent = not attach_full
         limit = self.settings.telegram_history_on_open_messages
         if context.args and context.args[0].isdigit():
             limit = max(
@@ -143,6 +144,7 @@ class PocketCodexTelegramBot:
             session=session,
             limit=limit,
             attach_full=attach_full,
+            inline_recent=inline_recent,
         )
 
     async def new_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -230,6 +232,7 @@ class PocketCodexTelegramBot:
                 session=session,
                 limit=self.settings.telegram_history_on_open_messages,
                 attach_full=True,
+                inline_recent=False,
             )
             await query.edit_message_text(
                 f"已连接 Codex 会话：{session.title}\n"
@@ -350,6 +353,7 @@ class PocketCodexTelegramBot:
         session,
         limit: int,
         attach_full: bool,
+        inline_recent: bool,
     ) -> None:
         if not session.codex_thread_id or not self.codex_store:
             await message.reply_text("这个会话还没有连接 Codex 桌面历史。")
@@ -363,10 +367,16 @@ class PocketCodexTelegramBot:
             await message.reply_text("这个 Codex 会话暂时没有可加载的历史。")
             return
 
-        title = f"已加载 Codex 历史：{session.title}"
-        body = self._format_transcript(recent)
-        for chunk in chunk_text(f"{title}\n最近 {len(recent)} 条：\n\n{body}", limit=3500):
-            await message.reply_text(chunk)
+        if inline_recent:
+            title = f"已加载 Codex 历史：{session.title}"
+            body = self._format_transcript(recent)
+            for chunk in chunk_text(f"{title}\n最近 {len(recent)} 条：\n\n{body}", limit=3500):
+                await message.reply_text(chunk)
+        else:
+            await message.reply_text(
+                f"已连接 Codex 会话：{session.title}\n"
+                "完整历史已整理成左右气泡版 HTML，打开附件查看。"
+            )
 
         if attach_full:
             full_messages = self.codex_store.messages(
@@ -378,7 +388,7 @@ class PocketCodexTelegramBot:
                 thread_id=session.codex_thread_id,
                 messages=full_messages,
             )
-            caption = f"完整历史导出：{session.title}（{len(full_messages)} 条）"
+            caption = f"左右气泡历史：{session.title}（{len(full_messages)} 条）"
             with export_path.open("rb") as file:
                 await message.reply_document(
                     document=file,
@@ -395,9 +405,9 @@ class PocketCodexTelegramBot:
     ) -> Path:
         export_dir = self.settings.data_dir / "exports"
         export_dir.mkdir(parents=True, exist_ok=True)
-        export_path = export_dir / f"codex-history-{thread_id}.md"
+        export_path = export_dir / f"codex-history-{thread_id}.html"
         export_path.write_text(
-            f"# {session_title}\n\n" + self._format_transcript(messages),
+            self._format_html_transcript(session_title, messages),
             encoding="utf-8",
         )
         return export_path
@@ -413,6 +423,64 @@ class PocketCodexTelegramBot:
                 content = content.removeprefix("[Telegram]\n").strip()
             blocks.append(f"## {index}. {label}\n{content}")
         return "\n\n".join(blocks)
+
+    @staticmethod
+    def _format_html_transcript(session_title: str, messages: list[MessageRecord]) -> str:
+        bubbles: list[str] = []
+        for record in messages:
+            role_class = "assistant" if record.role == "assistant" else "user"
+            label = "Codex" if record.role == "assistant" else "你（电脑）"
+            content = record.content.strip()
+            if record.role == "user" and content.startswith("[Telegram]\n"):
+                label = "你（手机）"
+                content = content.removeprefix("[Telegram]\n").strip()
+            bubbles.append(
+                "\n".join(
+                    [
+                        f'<article class="bubble {role_class}">',
+                        f'  <div class="meta">{escape(label)}</div>',
+                        f"  <div>{escape(content).replace(chr(10), '<br>')}</div>",
+                        "</article>",
+                    ]
+                )
+            )
+
+        return "\n".join(
+            [
+                "<!doctype html>",
+                '<html lang="zh-CN">',
+                "<head>",
+                '<meta charset="utf-8">',
+                '<meta name="viewport" content="width=device-width, initial-scale=1">',
+                f"<title>{escape(session_title)}</title>",
+                "<style>",
+                (
+                    "body{margin:0;background:#dfeec7;font:16px/1.55 "
+                    "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;}"
+                ),
+                ".page{max-width:980px;margin:0 auto;padding:24px 18px 48px;}",
+                "h1{font-size:20px;margin:0 0 18px;text-align:center;}",
+                (
+                    ".bubble{max-width:72%;box-sizing:border-box;margin:10px 0;"
+                    "padding:12px 14px;border-radius:12px;"
+                    "box-shadow:0 1px 1px rgba(0,0,0,.08);white-space:normal;}"
+                ),
+                ".assistant{background:#fff;margin-right:auto;border-top-left-radius:4px;}",
+                ".user{background:#d8f7c5;margin-left:auto;border-top-right-radius:4px;}",
+                ".meta{font-size:12px;color:#667;margin-bottom:6px;font-weight:600;}",
+                "pre,code{white-space:pre-wrap;word-break:break-word;}",
+                "@media(max-width:640px){.bubble{max-width:92%;}.page{padding:14px 10px 32px;}}",
+                "</style>",
+                "</head>",
+                "<body>",
+                '<main class="page">',
+                f"<h1>{escape(session_title)}</h1>",
+                *bubbles,
+                "</main>",
+                "</body>",
+                "</html>",
+            ]
+        )
 
     def _session_markup(self, user_id: int, project_id: str) -> InlineKeyboardMarkup:
         project = self.repository.get_project(project_id)
