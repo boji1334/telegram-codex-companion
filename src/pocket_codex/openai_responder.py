@@ -22,6 +22,7 @@ class OpenAIResponder:
         project_prompt: str,
         history: list[MessageRecord],
         user_message: str,
+        model: str | None = None,
     ) -> str:
         instructions = self._instructions(
             project_name=project_name,
@@ -36,7 +37,7 @@ class OpenAIResponder:
         input_messages.append({"role": "user", "content": user_message})
 
         response = await self.client.responses.create(
-            model=self.settings.openai_model,
+            model=model or self.settings.openai_model,
             instructions=instructions,
             input=input_messages,
             store=self.settings.openai_store,

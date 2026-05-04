@@ -79,6 +79,7 @@ You can also start it later with:
 - `/projects` opens the project picker.
 - `/sessions` opens the session picker for the current project.
 - `/history` exports the selected Codex Desktop thread as a full bubble-style HTML transcript.
+- `/model` shows or changes the active GPT model.
 - `/new Title` creates a new session in the current project.
 - `/rename Title` renames the current session.
 - `/status` shows the active project, session, and model.
@@ -101,6 +102,7 @@ Environment variables:
 | `TELEGRAM_ALLOWED_USER_IDS` | Recommended | Comma-separated Telegram user ids allowed to use the bot. |
 | `BOT_SETUP_TOKEN` | Optional | A private token for first-time `/claim`. |
 | `OPENAI_MODEL` | Optional | Defaults to `gpt-5.4-mini`. |
+| `OPENAI_MODEL_CHOICES` | Optional | Comma-separated models shown by `/model`. |
 | `OPENAI_BASE_URL` | Optional | OpenAI-compatible API base URL for gateways or proxies. |
 | `OPENAI_STORE` | Optional | Defaults to `false`; history is stored locally in SQLite. |
 | `POCKET_CODEX_DATA_DIR` | Optional | Defaults to `./data`. |

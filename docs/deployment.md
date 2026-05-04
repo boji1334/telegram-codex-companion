@@ -44,6 +44,7 @@ If you use an OpenAI-compatible gateway, set:
 
 ```env
 OPENAI_MODEL=gpt-5.5
+OPENAI_MODEL_CHOICES=gpt-5.5,gpt-5.4,gpt-5.4-mini
 OPENAI_BASE_URL=http://your-compatible-api-host:port
 ```
 
@@ -96,6 +97,7 @@ When sync is enabled:
 - Selecting a thread in Telegram sends a bubble-style HTML transcript export.
 - The HTML transcript embeds mobile-friendly image thumbnails from Codex history.
 - `/history` resends the full HTML transcript.
+- `/model` changes the active GPT model for future replies.
 
 ## 6. First Run
 
@@ -153,6 +155,7 @@ Useful commands:
 
 - `/status` shows current project, session, and model.
 - `/history` sends the full HTML transcript.
+- `/model` switches the active GPT model.
 - `/projects` switches project.
 - `/sessions` switches Codex thread.
 - `/exit` exits the current conversation; plain text `exit`, `退出`, or `退出对话`
@@ -175,6 +178,8 @@ If Telegram replies say the model call failed:
 
 - Check `OPENAI_API_KEY`.
 - Check `OPENAI_BASE_URL` if using a gateway.
+- Check `data/logs/pocket-codex.log` for the detailed exception.
+- Use `/model` in Telegram to switch to another configured model and retry.
 - Run `.\.conda\python.exe -m pocket_codex --check-config`.
 - Restart the bot.
 

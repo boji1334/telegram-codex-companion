@@ -54,6 +54,7 @@ class PocketCodexTelegramBot:
         app.add_handler(CommandHandler("projects", self.projects))
         app.add_handler(CommandHandler("sessions", self.sessions))
         app.add_handler(CommandHandler("history", self.history))
+        app.add_handler(CommandHandler("model", self.model))
         app.add_handler(CommandHandler("new", self.new_session))
         app.add_handler(CommandHandler("rename", self.rename_session))
         app.add_handler(CommandHandler("status", self.status))
@@ -83,6 +84,7 @@ class PocketCodexTelegramBot:
                     "/projects - 选择项目",
                     "/sessions - 选择当前项目里的 Codex 桌面会话",
                     "/history - 提取完整对话记录，发送气泡版 HTML 附件",
+                    "/model - 查看或切换当前 GPT 模型",
                     "/new 标题 - 新建会话",
                     "/rename 标题 - 重命名当前会话",
                     "/status - 查看当前项目和会话",
@@ -153,6 +155,32 @@ class PocketCodexTelegramBot:
             inline_recent=False,
         )
 
+    async def model(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._require_authorized(update):
+            return
+        state = await self._ensure_state(update)
+        current_model = self._effective_model(state)
+        if context.args:
+            requested_model = context.args[0].strip()
+            if requested_model not in self.settings.openai_model_choices:
+                await update.effective_message.reply_text(
+                    "这个模型不在可选列表里。\n"
+                    f"当前模型：{current_model}\n"
+                    f"可选模型：{', '.join(self.settings.openai_model_choices)}"
+                )
+                return
+            self.repository.set_user_model(
+                user_id=update.effective_user.id,
+                model=requested_model,
+            )
+            await update.effective_message.reply_text(f"已切换模型：{requested_model}")
+            return
+
+        await update.effective_message.reply_text(
+            f"当前模型：{current_model}\n选择一个模型：",
+            reply_markup=self._model_markup(current_model),
+        )
+
     async def new_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
             return
@@ -198,8 +226,9 @@ class PocketCodexTelegramBot:
         session = self.repository.get_session(state.session_id)
         project_name = project["name"] if project else state.project_id
         session_title = session.title if session else state.session_id
+        current_model = self._effective_model(state)
         await update.effective_message.reply_text(
-            f"当前项目：{project_name}\n当前会话：{session_title}\n模型：{self.settings.openai_model}"
+            f"当前项目：{project_name}\n当前会话：{session_title}\n模型：{current_model}"
         )
 
     async def on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -256,6 +285,19 @@ class PocketCodexTelegramBot:
                 reply_markup=self._session_markup(update.effective_user.id, value),
             )
             return
+        if kind == "model":
+            try:
+                model_index = int(value)
+                selected_model = self.settings.openai_model_choices[model_index]
+            except (ValueError, IndexError):
+                await query.edit_message_text("这个模型选项已经失效，请重新发送 /model。")
+                return
+            self.repository.set_user_model(
+                user_id=update.effective_user.id,
+                model=selected_model,
+            )
+            await query.edit_message_text(f"已切换模型：{selected_model}")
+            return
 
     async def on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
@@ -283,6 +325,7 @@ class PocketCodexTelegramBot:
             await message.reply_text("当前项目不存在，请用 /projects 重新选择。")
             return
 
+        current_model = self._effective_model(state)
         await context.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
         self.repository.append_message(
             session_id=state.session_id,
@@ -307,10 +350,14 @@ class PocketCodexTelegramBot:
                 project_prompt=project["system_prompt"],
                 history=history[:-1],
                 user_message=message.text,
+                model=current_model,
             )
-        except Exception:
-            logger.exception("OpenAI response failed")
-            await message.reply_text("这次调用失败了。我已经把错误写进日志，稍后可以重试。")
+        except Exception as exc:
+            logger.exception("OpenAI response failed using model %s", current_model)
+            await message.reply_text(
+                f"这次调用失败了（{type(exc).__name__}，模型：{current_model}）。\n"
+                "我已经把详细错误写进日志；你也可以用 /model 切换模型后重试。"
+            )
             return
 
         self.repository.append_message(
@@ -361,6 +408,18 @@ class PocketCodexTelegramBot:
             "已退出当前对话。你的会话记录还在，不会删除。\n"
             "之后普通消息不会发送给模型；发送 /start 重新进入，或 /help 查看命令。"
         )
+
+    def _effective_model(self, state) -> str:
+        if state.selected_model in self.settings.openai_model_choices:
+            return state.selected_model
+        return self.settings.openai_model
+
+    def _model_markup(self, current_model: str) -> InlineKeyboardMarkup:
+        buttons = []
+        for index, model in enumerate(self.settings.openai_model_choices):
+            label = f"{model}（当前）" if model == current_model else model
+            buttons.append([InlineKeyboardButton(label, callback_data=f"model:{index}")])
+        return InlineKeyboardMarkup(buttons)
 
     async def _send_project_picker(self, update: Update) -> None:
         projects = self.repository.list_projects()

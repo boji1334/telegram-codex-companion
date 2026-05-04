@@ -25,6 +25,7 @@ class Settings:
     telegram_bot_token: str
     openai_api_key: str
     openai_model: str
+    openai_model_choices: tuple[str, ...]
     openai_base_url: str | None
     openai_store: bool
     data_dir: Path
@@ -54,10 +55,16 @@ def load_settings() -> Settings:
     if not projects_file.is_absolute():
         projects_file = projects_file.resolve()
 
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
+    model_choices = _csv_env("OPENAI_MODEL_CHOICES", default=(openai_model,))
+    if openai_model not in model_choices:
+        model_choices = (openai_model, *model_choices)
+
     settings = Settings(
         telegram_bot_token=telegram_bot_token,
         openai_api_key=openai_api_key,
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+        openai_model=openai_model,
+        openai_model_choices=model_choices,
         openai_base_url=_optional("OPENAI_BASE_URL"),
         openai_store=_bool_env("OPENAI_STORE", default=False),
         data_dir=data_dir,
@@ -133,6 +140,20 @@ def _int_set_env(name: str) -> set[int]:
                 f"{name} must contain comma-separated numeric Telegram user ids."
             ) from exc
     return values
+
+
+def _csv_env(name: str, *, default: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    values: list[str] = []
+    seen: set[str] = set()
+    for item in raw.split(","):
+        value = item.strip()
+        if value and value not in seen:
+            values.append(value)
+            seen.add(value)
+    return tuple(values) or default
 
 
 def _load_projects(path: Path) -> list[ProjectConfig]:

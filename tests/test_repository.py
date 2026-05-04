@@ -20,15 +20,22 @@ def test_repository_creates_state_and_sessions(tmp_path: Path) -> None:
 
     assert state.project_id == "general"
     assert state.is_active is True
+    assert state.selected_model is None
     assert repo.has_user(42)
 
     inactive_state = repo.set_user_active(user_id=42, active=False)
     assert inactive_state.is_active is False
+    assert inactive_state.selected_model is None
     assert repo.ensure_state(42).is_active is False
+
+    model_state = repo.set_user_model(user_id=42, model="gpt-5.5")
+    assert model_state.selected_model == "gpt-5.5"
+    assert repo.ensure_state(42).selected_model == "gpt-5.5"
 
     work_state = repo.set_current_project(user_id=42, project_id="work")
     assert work_state.project_id == "work"
     assert work_state.is_active is True
+    assert work_state.selected_model == "gpt-5.5"
 
     session = repo.create_session(user_id=42, project_id="work", title="Research")
     repo.append_message(session_id=session.id, role="user", content="hi")
@@ -93,4 +100,4 @@ def test_repository_migrates_existing_user_state_active_flag(tmp_path: Path) -> 
             row["name"]
             for row in conn.execute("PRAGMA table_info(user_state)").fetchall()
         }
-    assert "is_active" in columns
+    assert {"is_active", "selected_model"}.issubset(columns)

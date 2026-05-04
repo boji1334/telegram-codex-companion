@@ -78,6 +78,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 - `/projects` 打开项目选择器。
 - `/sessions` 打开当前项目的会话选择器。
 - `/history` 提取当前 Codex 桌面端会话的完整气泡样式 HTML 历史导出。
+- `/model` 查看或切换当前 GPT 模型。
 - `/new Title` 在当前项目中新建会话。
 - `/rename Title` 重命名当前会话。
 - `/status` 查看当前项目、会话和模型。
@@ -99,6 +100,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 | `TELEGRAM_ALLOWED_USER_IDS` | 推荐 | 允许使用 bot 的 Telegram user id，多个 id 用逗号分隔。 |
 | `BOT_SETUP_TOKEN` | 可选 | 首次 `/claim` 使用的私有授权 token。 |
 | `OPENAI_MODEL` | 可选 | 默认是 `gpt-5.4-mini`。 |
+| `OPENAI_MODEL_CHOICES` | 可选 | `/model` 中可选择的模型，多个模型用逗号分隔。 |
 | `OPENAI_BASE_URL` | 可选 | OpenAI 兼容网关或代理的 API base URL。 |
 | `OPENAI_STORE` | 可选 | 默认是 `false`；历史记录保存在本地 SQLite。 |
 | `POCKET_CODEX_DATA_DIR` | 可选 | 默认是 `./data`。 |

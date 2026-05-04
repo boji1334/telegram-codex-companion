@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sys
 from collections.abc import Sequence
 
 from . import __version__
@@ -23,6 +24,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stdout,
     )
     # httpx logs Telegram Bot API URLs at INFO level, which includes the bot token.
     logging.getLogger("httpx").setLevel(logging.WARNING)
