@@ -350,7 +350,7 @@ class Repository:
                 SELECT id, project_id, title, created_at, updated_at, codex_thread_id
                 FROM sessions
                 WHERE created_by = ? AND project_id = ?
-                ORDER BY updated_at DESC
+                ORDER BY updated_at DESC, rowid DESC
                 LIMIT 1
                 """,
                 (user_id, project_id),
@@ -370,7 +370,7 @@ class Repository:
                 SELECT id, project_id, title, created_at, updated_at, codex_thread_id
                 FROM sessions
                 WHERE created_by = ? AND project_id = ?
-                ORDER BY updated_at DESC
+                ORDER BY updated_at DESC, rowid DESC
                 LIMIT ?
                 """,
                 (user_id, project_id, limit),

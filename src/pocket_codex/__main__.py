@@ -24,6 +24,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # httpx logs Telegram Bot API URLs at INFO level, which includes the bot token.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     if args.check_config:
         settings = load_settings()
         print(f"Configuration OK. Loaded {len(settings.projects)} project(s).")
