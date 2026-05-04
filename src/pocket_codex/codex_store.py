@@ -82,6 +82,8 @@ class CodexStore:
         now = _timestamp()
         records = [
             _message_record(now, "user", f"[Telegram]\n{user_text}", "input_text"),
+            _event_message(now, "user_message", f"[Telegram]\n{user_text}"),
+            _event_message(now, "agent_message", assistant_text),
             _message_record(now, "assistant", assistant_text, "output_text"),
         ]
         with thread.rollout_path.open("a", encoding="utf-8", newline="\n") as file:
@@ -99,6 +101,63 @@ class CodexStore:
                 """,
                 (unix_seconds, unix_ms, thread_id),
             )
+
+    def backfill_telegram_events(self, *, thread_id: str) -> int:
+        thread = self.get_thread(thread_id)
+        if thread is None:
+            raise ValueError(f"Unknown Codex thread: {thread_id}")
+        if not thread.rollout_path.exists():
+            raise FileNotFoundError(thread.rollout_path)
+
+        raw_lines = thread.rollout_path.read_text(encoding="utf-8").splitlines()
+        records = [json.loads(line) for line in raw_lines if line.strip()]
+        patched: list[dict] = []
+        inserted = 0
+        i = 0
+
+        while i < len(records):
+            current = records[i]
+            patched.append(current)
+            payload = current.get("payload") or {}
+            payload_text = _text_from_payload(payload)
+            if _is_message(current, "user") and payload_text.startswith("[Telegram]"):
+                timestamp = current.get("timestamp") or _timestamp()
+                if not _next_is_event(records, i, "user_message"):
+                    patched.append(_event_message(timestamp, "user_message", payload_text))
+                    inserted += 1
+
+                if i + 1 < len(records):
+                    next_record = records[i + 1]
+                    next_payload = next_record.get("payload") or {}
+                    if _is_message(next_record, "assistant"):
+                        assistant_text = _text_from_payload(next_payload)
+                        if assistant_text and not _previous_is_event(
+                            patched,
+                            "agent_message",
+                            assistant_text,
+                        ):
+                            patched.append(
+                                _event_message(
+                                    next_record.get("timestamp") or timestamp,
+                                    "agent_message",
+                                    assistant_text,
+                                )
+                            )
+                            inserted += 1
+            i += 1
+
+        if inserted:
+            backup = thread.rollout_path.with_suffix(thread.rollout_path.suffix + ".bak")
+            backup.write_text("\n".join(raw_lines) + "\n", encoding="utf-8")
+            thread.rollout_path.write_text(
+                "\n".join(
+                    json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+                    for record in patched
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        return inserted
 
     def _list_threads(self, *, limit: int) -> list[CodexThread]:
         with sqlite3.connect(f"file:{self.state_db}?mode=ro", uri=True) as conn:
@@ -177,3 +236,63 @@ def _message_record(timestamp: str, role: str, text: str, content_type: str) -> 
             "content": [{"type": content_type, "text": text}],
         },
     }
+
+
+def _event_message(timestamp: str, event_type: str, text: str) -> dict:
+    if event_type == "user_message":
+        payload = {
+            "type": "user_message",
+            "message": text,
+            "images": [],
+            "local_images": [],
+            "text_elements": [],
+        }
+    elif event_type == "agent_message":
+        payload = {
+            "type": "agent_message",
+            "message": text,
+            "phase": "final",
+            "memory_citation": None,
+        }
+    else:
+        raise ValueError(f"Unsupported event type: {event_type}")
+    return {
+        "timestamp": timestamp,
+        "type": "event_msg",
+        "payload": payload,
+    }
+
+
+def _is_message(record: dict, role: str) -> bool:
+    payload = record.get("payload") or {}
+    return (
+        record.get("type") == "response_item"
+        and payload.get("type") == "message"
+        and payload.get("role") == role
+    )
+
+
+def _text_from_payload(payload: dict) -> str:
+    parts: list[str] = []
+    for item in payload.get("content") or []:
+        if isinstance(item, dict) and isinstance(item.get("text"), str):
+            parts.append(item["text"])
+    return "\n".join(parts)
+
+
+def _next_is_event(records: list[dict], index: int, event_type: str) -> bool:
+    if index + 1 >= len(records):
+        return False
+    payload = records[index + 1].get("payload") or {}
+    return records[index + 1].get("type") == "event_msg" and payload.get("type") == event_type
+
+
+def _previous_is_event(records: list[dict], event_type: str, text: str) -> bool:
+    if not records:
+        return False
+    payload = records[-1].get("payload") or {}
+    return (
+        records[-1].get("type") == "event_msg"
+        and payload.get("type") == event_type
+        and payload.get("message") == text
+    )
