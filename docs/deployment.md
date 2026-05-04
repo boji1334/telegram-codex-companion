@@ -94,6 +94,7 @@ When sync is enabled:
 - Telegram messages are appended to the selected Codex rollout file.
 - Codex Desktop can inherit mobile messages after reopening the thread.
 - Selecting a thread in Telegram sends a bubble-style HTML transcript export.
+- The HTML transcript embeds mobile-friendly image thumbnails from Codex history.
 - `/history` reloads recent history.
 - `/history all` resends the full HTML transcript.
 
@@ -146,7 +147,8 @@ Choose a project.
 ```
 
 Choose a Codex Desktop thread. The bot will attach a bubble-style HTML history
-file, then future Telegram messages will continue that thread.
+file with text and image thumbnails, then future Telegram messages will continue
+that thread.
 
 Useful commands:
 
@@ -207,4 +209,3 @@ Do not commit:
 - Codex rollout backups
 
 The included `.gitignore` excludes these by default.
-

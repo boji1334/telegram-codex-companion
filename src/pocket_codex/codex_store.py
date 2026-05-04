@@ -71,7 +71,7 @@ class CodexStore:
         messages: list[MessageRecord] = []
         with thread.rollout_path.open("r", encoding="utf-8") as file:
             for line in file:
-                record = self._message_from_line(line)
+                record = self._message_from_line(line, thread_id=thread_id)
                 if record:
                     messages.append(record)
         return messages[-limit:] if limit is not None else messages
@@ -178,13 +178,24 @@ class CodexStore:
             ).fetchall()
         return [_thread_from_row(row) for row in rows]
 
-    @staticmethod
-    def _message_from_line(line: str) -> MessageRecord | None:
+    def _message_from_line(self, line: str, *, thread_id: str) -> MessageRecord | None:
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
             return None
         payload = obj.get("payload") or {}
+
+        if obj.get("type") == "response_item" and payload.get("type") == "image_generation_call":
+            image_path = self._generated_image_path(thread_id=thread_id, call_id=payload.get("id"))
+            if image_path is None:
+                return None
+            return MessageRecord(
+                role="assistant",
+                content="生成图片",
+                created_at=obj.get("timestamp") or "",
+                images=(str(image_path),),
+            )
+
         if obj.get("type") != "response_item" or payload.get("type") != "message":
             return None
         role = payload.get("role")
@@ -192,19 +203,33 @@ class CodexStore:
             return None
 
         parts: list[str] = []
+        images: list[str] = []
         for item in payload.get("content") or []:
             if isinstance(item, dict):
                 text = item.get("text")
-                if isinstance(text, str):
+                if isinstance(text, str) and not _is_image_marker(text):
                     parts.append(text)
+                images.extend(_image_refs_from_item(item))
         text = "\n".join(part for part in parts if part).strip()
-        if not text or text.startswith("<environment_context>"):
+        images = _dedupe(images)
+        if (not text and not images) or text.startswith("<environment_context>"):
             return None
         return MessageRecord(
             role=role,
             content=text,
             created_at=obj.get("timestamp") or "",
+            images=tuple(images),
         )
+
+    def _generated_image_path(self, *, thread_id: str, call_id: object) -> Path | None:
+        if not isinstance(call_id, str) or not call_id:
+            return None
+        image_dir = self.codex_home / "generated_images" / thread_id
+        for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+            image_path = image_dir / f"{call_id}{suffix}"
+            if image_path.exists():
+                return image_path
+        return next(image_dir.glob(f"{call_id}.*"), None) if image_dir.exists() else None
 
 
 def _thread_from_row(row: sqlite3.Row) -> CodexThread:
@@ -285,6 +310,32 @@ def _text_from_payload(payload: dict) -> str:
         if isinstance(item, dict) and isinstance(item.get("text"), str):
             parts.append(item["text"])
     return "\n".join(parts)
+
+
+def _image_refs_from_item(item: dict) -> list[str]:
+    refs: list[str] = []
+    for key in ("image_url", "path", "local_path", "file_path"):
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            refs.append(value)
+    return refs
+
+
+def _is_image_marker(text: str) -> bool:
+    marker = text.strip()
+    return marker == "</image>" or (
+        marker.startswith("<image") and marker.endswith(">") and "\n" not in marker
+    )
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _next_is_event(records: list[dict], index: int, event_type: str) -> bool:

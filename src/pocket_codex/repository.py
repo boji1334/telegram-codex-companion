@@ -29,6 +29,7 @@ class MessageRecord:
     role: str
     content: str
     created_at: str
+    images: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

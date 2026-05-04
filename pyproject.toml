@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
   "openai>=2.0.0",
+  "pillow>=10.0.0",
   "python-dotenv>=1.0.1",
   "python-telegram-bot>=22.0",
 ]

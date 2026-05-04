@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
+import mimetypes
 from html import escape
+from io import BytesIO
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
@@ -22,6 +27,8 @@ from .repository import MessageRecord, Repository
 from .text import chunk_text, compact_label
 
 logger = logging.getLogger(__name__)
+MAX_HISTORY_IMAGE_SIDE = 1280
+HISTORY_IMAGE_JPEG_QUALITY = 82
 
 
 class PocketCodexTelegramBot:
@@ -421,12 +428,15 @@ class PocketCodexTelegramBot:
             if record.role == "user" and content.startswith("[Telegram]\n"):
                 label = "你（手机）"
                 content = content.removeprefix("[Telegram]\n").strip()
+            if record.images:
+                content = f"{content}\n[图片 {len(record.images)} 张]".strip()
             blocks.append(f"## {index}. {label}\n{content}")
         return "\n\n".join(blocks)
 
     @staticmethod
     def _format_html_transcript(session_title: str, messages: list[MessageRecord]) -> str:
         bubbles: list[str] = []
+        image_cache: dict[str, str | None] = {}
         for record in messages:
             role_class = "assistant" if record.role == "assistant" else "user"
             label = "Codex" if record.role == "assistant" else "你（电脑）"
@@ -434,15 +444,19 @@ class PocketCodexTelegramBot:
             if record.role == "user" and content.startswith("[Telegram]\n"):
                 label = "你（手机）"
                 content = content.removeprefix("[Telegram]\n").strip()
-            bubbles.append(
-                "\n".join(
-                    [
-                        f'<article class="bubble {role_class}">',
-                        f'  <div class="meta">{escape(label)}</div>',
-                        f"  <div>{escape(content).replace(chr(10), '<br>')}</div>",
-                        "</article>",
-                    ]
+            bubble_parts = [
+                f'<article class="bubble {role_class}">',
+                f'  <div class="meta">{escape(label)}</div>',
+            ]
+            if content:
+                message_text = escape(content).replace(chr(10), "<br>")
+                bubble_parts.append(
+                    f'  <div class="message-text">{message_text}</div>'
                 )
+            bubble_parts.extend(_format_image_gallery(record.images, image_cache))
+            bubble_parts.append("</article>")
+            bubbles.append(
+                "\n".join(bubble_parts)
             )
 
         return "\n".join(
@@ -468,6 +482,20 @@ class PocketCodexTelegramBot:
                 ".assistant{background:#fff;margin-right:auto;border-top-left-radius:4px;}",
                 ".user{background:#d8f7c5;margin-left:auto;border-top-right-radius:4px;}",
                 ".meta{font-size:12px;color:#667;margin-bottom:6px;font-weight:600;}",
+                ".message-text{overflow-wrap:anywhere;}",
+                (
+                    ".image-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));"
+                    "gap:8px;margin-top:9px;}"
+                ),
+                (
+                    ".image-grid img{display:block;width:100%;height:auto;max-height:72vh;"
+                    "object-fit:contain;border-radius:10px;border:1px solid rgba(0,0,0,.08);"
+                    "background:#f7f7f7;}"
+                ),
+                (
+                    ".missing-image{font-size:12px;color:#7a5b00;background:#fff8d6;"
+                    "border:1px solid #eedb8a;border-radius:8px;padding:8px;}"
+                ),
                 "pre,code{white-space:pre-wrap;word-break:break-word;}",
                 "@media(max-width:640px){.bubble{max-width:92%;}.page{padding:14px 10px 32px;}}",
                 "</style>",
@@ -522,3 +550,125 @@ class PocketCodexTelegramBot:
                 ]
             ]
         return InlineKeyboardMarkup(buttons)
+
+
+def _format_image_gallery(
+    images: tuple[str, ...],
+    image_cache: dict[str, str | None],
+) -> list[str]:
+    tags: list[str] = []
+    for image_ref in images:
+        if image_ref not in image_cache:
+            image_cache[image_ref] = _image_ref_to_html_src(image_ref)
+        src = image_cache[image_ref]
+        if src:
+            tags.append(
+                f'    <img src="{escape(src, quote=True)}" alt="conversation image" loading="lazy">'
+            )
+        else:
+            tags.append(
+                f'    <div class="missing-image">图片暂时无法读取：'
+                f"{escape(_short_image_ref(image_ref))}</div>"
+            )
+    if not tags:
+        return []
+    return ["  <div class=\"image-grid\">", *tags, "  </div>"]
+
+
+def _image_ref_to_html_src(image_ref: str) -> str | None:
+    if image_ref.startswith("data:image/"):
+        return _thumbnail_data_url_from_data_url(image_ref) or image_ref
+    if image_ref.startswith(("http://", "https://")):
+        return image_ref
+
+    path = _path_from_image_ref(image_ref)
+    if path is None or not path.is_file():
+        return None
+    return _data_url_from_local_image(path)
+
+
+def _thumbnail_data_url_from_data_url(data_url: str) -> str | None:
+    parsed = _parse_data_url(data_url)
+    if parsed is None:
+        return None
+    mime_type, raw = parsed
+    return _thumbnail_data_url(raw, mime_type=mime_type)
+
+
+def _data_url_from_local_image(path: Path) -> str | None:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+
+    mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    thumbnail = _thumbnail_data_url(raw, mime_type=mime_type)
+    if thumbnail:
+        return thumbnail
+    encoded = base64.b64encode(raw).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _thumbnail_data_url(raw: bytes, *, mime_type: str) -> str | None:
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        return None
+
+    try:
+        with Image.open(BytesIO(raw)) as image:
+            image = ImageOps.exif_transpose(image)
+            image.thumbnail((MAX_HISTORY_IMAGE_SIDE, MAX_HISTORY_IMAGE_SIDE))
+            if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+                background = Image.new("RGB", image.size, "white")
+                rgba = image.convert("RGBA")
+                background.paste(rgba, mask=rgba.getchannel("A"))
+                image = background
+            else:
+                image = image.convert("RGB")
+
+            output = BytesIO()
+            image.save(
+                output,
+                format="JPEG",
+                quality=HISTORY_IMAGE_JPEG_QUALITY,
+                optimize=True,
+                progressive=True,
+            )
+    except Exception:
+        return None
+
+    thumbnail = output.getvalue()
+    if mime_type in {"image/jpeg", "image/jpg"} and len(thumbnail) >= len(raw):
+        return None
+    return f"data:image/jpeg;base64,{base64.b64encode(thumbnail).decode('ascii')}"
+
+
+def _parse_data_url(data_url: str) -> tuple[str, bytes] | None:
+    header, separator, encoded = data_url.partition(",")
+    if not separator or ";base64" not in header:
+        return None
+    mime_type = header.removeprefix("data:").split(";", maxsplit=1)[0] or "image/png"
+    try:
+        return mime_type, base64.b64decode(encoded, validate=False)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _path_from_image_ref(image_ref: str) -> Path | None:
+    if image_ref.startswith("file:"):
+        parsed = urlparse(image_ref)
+        raw_path = unquote(parsed.path)
+        if raw_path.startswith("/") and len(raw_path) > 3 and raw_path[2] == ":":
+            raw_path = raw_path[1:]
+        return Path(raw_path)
+    try:
+        return Path(image_ref)
+    except OSError:
+        return None
+
+
+def _short_image_ref(image_ref: str) -> str:
+    if image_ref.startswith("data:image/"):
+        return "内嵌图片数据"
+    return image_ref if len(image_ref) <= 120 else f"{image_ref[:117]}..."

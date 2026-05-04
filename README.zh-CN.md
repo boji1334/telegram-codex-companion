@@ -14,6 +14,7 @@ Pocket Codex 是一个私有 Telegram 对话助手，用来在长期项目中和
 - 通过 Telegram 内联按钮切换项目和会话。
 - 可选 Codex 桌面端同步：列出本机 Codex threads，读取历史，并把 Telegram
   对话追加回选中的 rollout。
+- 气泡样式 HTML 历史导出会内嵌图片缩略图，手机上可以看到你发送的截图和 Codex 生成图。
 - 使用 SQLite 在你自己的电脑上保存对话历史。
 - 支持用户白名单和首次 `/claim` 授权流程。
 - 使用 OpenAI Responses API 作为模型后端。
@@ -132,8 +133,9 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 这样桌面端恢复这条会话时可以继承手机端的上下文。
 
 选择 Codex 会话时，Pocket Codex 会发送一份左右气泡样式的 HTML 历史文件，方便在手机上
-查看电脑端和手机端的完整上下文。之后也可以用 `/history` 重新加载最近纯文本历史，或用
-`/history all` 重新获取导出文件。
+查看电脑端和手机端的完整上下文。导出文件会把 Codex rollout 里的图片转成内嵌缩略图，
+包括你发给 Codex 的截图和已经落盘的 Codex 生成图。之后也可以用 `/history` 重新加载
+最近纯文本历史，或用 `/history all` 重新获取导出文件。
 
 ## 开发
 

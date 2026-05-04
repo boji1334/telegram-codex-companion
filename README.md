@@ -14,6 +14,8 @@ The default deployment does not need a public IP address or an exposed port.
 - Project and session switching with Telegram inline buttons.
 - Optional Codex Desktop sync: list local Codex threads, read their history, and append
   Telegram exchanges back to the selected rollout.
+- Bubble-style HTML history exports include embedded image thumbnails for screenshots
+  you sent to Codex and generated images saved by Codex.
 - SQLite conversation history stored on your own machine.
 - User allowlist and first-time `/claim` setup flow.
 - OpenAI Responses API backend.
@@ -134,8 +136,10 @@ rollout file with a `[Telegram]` marker so the desktop thread can inherit the mo
 conversation when resumed.
 
 When a Codex thread is selected, Pocket Codex attaches a bubble-style HTML transcript so
-desktop and mobile history can be reviewed in one place. You can reload recent text later
-with `/history`, or request the transcript again with `/history all`.
+desktop and mobile history can be reviewed in one place. The export embeds thumbnails for
+images found in the Codex rollout, including screenshots you sent to Codex and generated
+images saved locally by Codex. You can reload recent text later with `/history`, or request
+the transcript again with `/history all`.
 
 ## Development
 
