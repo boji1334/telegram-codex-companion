@@ -82,6 +82,26 @@ def test_codex_store_reads_and_appends_rollout_messages(tmp_path: Path) -> None:
     assert records[-1]["payload"]["phase"] == "final_answer"
 
 
+def test_codex_store_appends_exchange_with_command_notes(tmp_path: Path) -> None:
+    codex_home = tmp_path / ".codex"
+    rollout_path = codex_home / "sessions" / "rollout.jsonl"
+    codex_home.mkdir()
+    rollout_path.parent.mkdir()
+    rollout_path.write_text("", encoding="utf-8")
+    _create_thread_db(codex_home, rollout_path, tmp_path)
+
+    CodexStore(codex_home).append_exchange(
+        thread_id="thread-1",
+        user_text="看一下服务器",
+        assistant_text="服务器还在跑。",
+        user_notes=("[Command output]\nps output",),
+    )
+
+    messages = CodexStore(codex_home).recent_messages(thread_id="thread-1", limit=10)
+    assert [message.role for message in messages] == ["user", "user", "assistant"]
+    assert messages[1].content == "[Command output]\nps output"
+
+
 def test_codex_store_appends_user_note_for_command_output(tmp_path: Path) -> None:
     codex_home = tmp_path / ".codex"
     rollout_path = codex_home / "sessions" / "rollout.jsonl"

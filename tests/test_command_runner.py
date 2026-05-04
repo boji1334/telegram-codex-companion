@@ -6,6 +6,7 @@ import pytest
 from pocket_codex.command_runner import (
     CommandRejected,
     _read_ssh_password,
+    _trim_outputs,
     run_local_command,
     validate_read_only_command,
 )
@@ -20,6 +21,18 @@ def test_validate_read_only_command_blocks_destructive_commands() -> None:
         validate_read_only_command("git reset --hard")
 
     assert validate_read_only_command("find artifacts -type f | sort | tail -n 20")
+
+
+def test_trim_outputs_zero_means_no_app_level_truncation() -> None:
+    stdout, stderr, truncated = _trim_outputs(
+        stdout="x" * 5000,
+        stderr="",
+        output_max_chars=0,
+    )
+
+    assert stdout == "x" * 5000
+    assert stderr == ""
+    assert truncated is False
 
 
 def test_run_local_command_captures_output(tmp_path: Path) -> None:

@@ -76,7 +76,14 @@ class CodexStore:
                     messages.append(record)
         return messages[-limit:] if limit is not None else messages
 
-    def append_exchange(self, *, thread_id: str, user_text: str, assistant_text: str) -> None:
+    def append_exchange(
+        self,
+        *,
+        thread_id: str,
+        user_text: str,
+        assistant_text: str,
+        user_notes: tuple[str, ...] = (),
+    ) -> None:
         thread = self.get_thread(thread_id)
         if thread is None:
             raise ValueError(f"Unknown Codex thread: {thread_id}")
@@ -87,9 +94,20 @@ class CodexStore:
         records = [
             _message_record(now, "user", f"[Telegram]\n{user_text}", "input_text"),
             _event_message(now, "user_message", f"[Telegram]\n{user_text}"),
-            _event_message(now, "agent_message", assistant_text),
-            _message_record(now, "assistant", assistant_text, "output_text"),
         ]
+        for note in user_notes:
+            records.extend(
+                [
+                    _message_record(now, "user", note, "input_text"),
+                    _event_message(now, "user_message", note),
+                ]
+            )
+        records.extend(
+            [
+                _event_message(now, "agent_message", assistant_text),
+                _message_record(now, "assistant", assistant_text, "output_text"),
+            ]
+        )
         with thread.rollout_path.open("a", encoding="utf-8", newline="\n") as file:
             for record in records:
                 file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")

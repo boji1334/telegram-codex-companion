@@ -107,8 +107,8 @@ def load_settings() -> Settings:
         ),
         command_output_max_chars=_int_env(
             "POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS",
-            default=12000,
-            minimum=1000,
+            default=0,
+            minimum=0,
         ),
         command_inline_max_chars=_int_env(
             "POCKET_CODEX_COMMAND_INLINE_MAX_CHARS",

@@ -88,7 +88,7 @@ you can turn it on in `.env`:
 ```env
 POCKET_CODEX_COMMANDS_ENABLED=true
 POCKET_CODEX_COMMAND_TIMEOUT_SECONDS=60
-POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS=12000
+POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS=0
 POCKET_CODEX_COMMAND_INLINE_MAX_CHARS=3500
 ```
 
@@ -121,6 +121,11 @@ Daily examples:
 `/run` executes in the local project folder. `/ssh` executes `cd ssh_remote_path && command`
 on the remote host. Output is sent back to Telegram and saved into the active conversation,
 so the next message can ask the model to analyze it.
+
+Plain chat can also use these tools automatically. After enabling this section, a message
+like `看一下服务器训练结果怎么样` gives the model access to the same read-only SSH/local
+commands, so it can inspect logs and artifacts before answering instead of asking you to
+paste command output manually.
 
 The runner is intentionally read-only: it blocks common delete, move, install, permission,
 process-kill, reboot, destructive Git, and output-redirection commands. Treat this as a

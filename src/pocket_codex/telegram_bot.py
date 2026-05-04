@@ -6,6 +6,7 @@ import binascii
 import contextlib
 import logging
 import mimetypes
+import uuid
 from dataclasses import dataclass
 from html import escape
 from io import BytesIO
@@ -33,7 +34,7 @@ from .command_runner import (
     run_ssh_command,
 )
 from .config import Settings
-from .openai_responder import OpenAIResponder
+from .openai_responder import OpenAIResponder, ProjectToolbox
 from .repository import MessageRecord, Repository
 from .telegram_format import html_to_plain_text, telegram_html_chunks
 from .text import chunk_text, compact_label
@@ -112,6 +113,7 @@ class PocketCodexTelegramBot:
                     "/status - 查看当前项目和会话",
                     "/run 命令 - 在当前项目本机目录执行只读命令，并写入会话记忆",
                     "/ssh 命令 - 在当前项目配置的远程服务器执行只读命令，并写入会话记忆",
+                    "普通对话也会在需要时自动调用 /run 或 /ssh 的同一套只读能力",
                     "/exit - 退出当前对话，普通消息会暂停发送给模型",
                     "/whoami - 查看 Telegram user id",
                     "exit - 和 /exit 一样，可直接输入",
@@ -385,14 +387,16 @@ class PocketCodexTelegramBot:
             )
             history_for_reply = history[:-1]
         try:
-            answer = await self.responder.reply(
+            reply_result = await self.responder.reply(
                 project_name=project["name"],
                 project_path=project["path"],
                 project_prompt=project["system_prompt"],
                 history=history_for_reply,
                 user_message=message.text,
                 model=current_model,
+                toolbox=self._project_toolbox(self._project_config(state.project_id)),
             )
+            answer = reply_result.text
         except Exception as exc:
             logger.exception("OpenAI response failed using model %s", current_model)
             await self._finish_wait_indicator(wait_indicator)
@@ -403,6 +407,13 @@ class PocketCodexTelegramBot:
             return
 
         await self._finish_wait_indicator(wait_indicator)
+        tool_notes = tuple(observation.content for observation in reply_result.tool_observations)
+        for note in tool_notes:
+            self.repository.append_message(
+                session_id=state.session_id,
+                role="system",
+                content=note,
+            )
         self.repository.append_message(
             session_id=state.session_id,
             role="assistant",
@@ -413,6 +424,7 @@ class PocketCodexTelegramBot:
                 thread_id=session.codex_thread_id,
                 user_text=message.text,
                 assistant_text=answer,
+                user_notes=tool_notes,
             )
         for chunk in telegram_html_chunks(answer):
             await self._reply_html(message, chunk)
@@ -556,11 +568,42 @@ class PocketCodexTelegramBot:
                 return project
         return None
 
+    def _project_toolbox(self, project) -> ProjectToolbox | None:
+        if (
+            project is None
+            or not self.settings.command_execution_enabled
+            or not project.allow_shell
+        ):
+            return None
+
+        async def run_local(command: str) -> str:
+            result = await run_local_command(
+                project=project,
+                command=command,
+                timeout_seconds=self.settings.command_timeout_seconds,
+                output_max_chars=self.settings.command_output_max_chars,
+            )
+            return command_memory_block(result)
+
+        async def run_ssh(command: str) -> str:
+            result = await run_ssh_command(
+                project=project,
+                command=command,
+                timeout_seconds=self.settings.command_timeout_seconds,
+                output_max_chars=self.settings.command_output_max_chars,
+            )
+            return command_memory_block(result)
+
+        return ProjectToolbox(
+            run_local=run_local if project.path else None,
+            run_ssh=run_ssh if project.ssh_target else None,
+        )
+
     async def _send_command_result(self, message, result) -> None:
         status = "超时" if result.timed_out else f"退出码 {result.exit_code}"
         title = "命令完成" if result.ok else "命令返回异常状态"
         if result.truncated:
-            title += "（输出已截断）"
+            title += "（完整输出见附件）"
         output = result.combined_output or "(no output)"
         text = "\n".join(
             [
@@ -575,8 +618,28 @@ class PocketCodexTelegramBot:
             ]
         )
         chunk_limit = min(self.settings.command_inline_max_chars, 3500)
+        if len(text) > chunk_limit * 3:
+            export_path = self._write_command_output_export(result, text)
+            preview = text[:chunk_limit]
+            await self._reply_html(message, f"<pre>{escape(preview)}</pre>")
+            with export_path.open("rb") as file:
+                await message.reply_document(
+                    document=file,
+                    filename=export_path.name,
+                    caption="命令输出",
+                )
+            return
+
         for chunk in chunk_text(text, limit=chunk_limit):
             await self._reply_html(message, f"<pre>{escape(chunk)}</pre>")
+
+    def _write_command_output_export(self, result, text: str) -> Path:
+        export_dir = self.settings.data_dir / "command_outputs"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        safe_mode = "".join(ch for ch in result.mode if ch.isalnum()) or "command"
+        export_path = export_dir / f"{safe_mode}-{uuid.uuid4().hex[:12]}.txt"
+        export_path.write_text(text, encoding="utf-8")
+        return export_path
 
     def _model_markup(self, current_model: str) -> InlineKeyboardMarkup:
         buttons = []

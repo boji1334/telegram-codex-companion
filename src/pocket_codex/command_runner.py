@@ -104,8 +104,6 @@ def validate_read_only_command(command: str) -> str:
     normalized = command.strip()
     if not normalized:
         raise CommandRejected("命令不能为空。")
-    if len(normalized) > 2000:
-        raise CommandRejected("命令太长；请拆成更小的只读查询。")
     if "\x00" in normalized:
         raise CommandRejected("命令包含非法字符。")
 
@@ -320,6 +318,9 @@ def _trim_outputs(
     stderr: str,
     output_max_chars: int,
 ) -> tuple[str, str, bool]:
+    if output_max_chars <= 0:
+        return stdout, stderr, False
+
     combined_len = len(stdout) + len(stderr)
     if combined_len <= output_max_chars:
         return stdout, stderr, False

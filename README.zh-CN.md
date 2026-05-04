@@ -18,6 +18,8 @@ Pocket Codex 是一个私有 Telegram 对话助手，用来在长期项目中和
 - Telegram 回复会把常见 Markdown 转成富文本显示，并在等待模型时显示动态等待提示。
 - 可选受控命令入口：`/run` 读取当前项目本机目录，`/ssh` 读取项目配置的远程服务器，
   输出会写入当前会话上下文，方便继续让模型分析日志和实验结果。
+- 普通对话可以自动调用同一套只读命令能力。例如你直接问“看一下服务器训练结果”，
+  模型会先读取远程日志/产物，再给出判断。
 - 使用 SQLite 在你自己的电脑上保存对话历史。
 - 支持用户白名单和首次 `/claim` 授权流程。
 - 使用 OpenAI Responses API 作为模型后端。
@@ -87,6 +89,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 - `/status` 查看当前项目、会话和模型。
 - `/run 命令` 在当前项目本机目录执行只读命令。
 - `/ssh 命令` 在当前项目配置的远程服务器执行只读命令。
+- 普通对话会在需要时自动调用同一套只读 `/run` / `/ssh` 能力。
 - `/exit` 退出当前对话，普通消息会暂停发送给模型。
 - `/whoami` 查看你的 Telegram user id。
 - `/claim token` 在配置了 `BOT_SETUP_TOKEN` 时授权当前账号。
@@ -117,7 +120,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 | `CODEX_HOME` | 可选 | 默认是当前用户的 `.codex` 目录。 |
 | `POCKET_CODEX_COMMANDS_ENABLED` | 可选 | 默认是 `false`。开启后仍需单个项目设置 `allow_shell=true`。 |
 | `POCKET_CODEX_COMMAND_TIMEOUT_SECONDS` | 可选 | `/run` 和 `/ssh` 超时秒数，默认是 `60`。 |
-| `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | 可选 | 写入会话上下文的最大输出字符数，默认是 `12000`。 |
+| `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | 可选 | 应用层命令输出预算，默认 `0` 表示不做应用层截断。 |
 | `POCKET_CODEX_COMMAND_INLINE_MAX_CHARS` | 可选 | Telegram 单条命令输出分块大小，默认是 `3500`。 |
 
 项目配置示例：
@@ -148,7 +151,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 项目路径会作为项目元信息传给模型。命令执行默认关闭；只有同时设置
 `POCKET_CODEX_COMMANDS_ENABLED=true` 和项目级 `allow_shell=true` 后，
 `/run`、`/ssh` 才能使用。命令入口按只读场景设计，会拦截删除、移动、安装、重启、
-Git 破坏性操作和输出重定向，并设置超时与输出截断。
+Git 破坏性操作和输出重定向，并设置超时。Telegram 长输出会自动分段或作为文本附件发送。
 
 开启 Codex 同步后，`/sessions` 会优先列出所选项目路径匹配的 Codex 桌面端会话。
 通过 Telegram 发送的新消息会带着 `[Telegram]` 标记追加到选中的 Codex rollout 文件，

@@ -21,6 +21,9 @@ The default deployment does not need a public IP address or an exposed port.
 - Optional controlled command access: `/run` reads from the current local project folder,
   `/ssh` reads from the project's configured remote server, and command output is saved
   into the active conversation context for follow-up analysis.
+- Plain chat can call the same read-only tools automatically. For example, asking
+  "check the server training results" lets the model inspect remote logs/artifacts
+  before answering.
 - SQLite conversation history stored on your own machine.
 - User allowlist and first-time `/claim` setup flow.
 - OpenAI Responses API backend.
@@ -90,6 +93,7 @@ You can also start it later with:
 - `/status` shows the active project, session, and model.
 - `/run command` runs a read-only command in the active local project folder.
 - `/ssh command` runs a read-only command on the active project's configured remote server.
+- Plain chat can automatically use the same read-only `/run` / `/ssh` capability when needed.
 - `/exit` exits the current conversation so plain text messages pause instead of
   being sent to the model.
 - `/whoami` shows your Telegram user id.
@@ -121,7 +125,7 @@ Environment variables:
 | `CODEX_HOME` | Optional | Defaults to the current user's `.codex` directory. |
 | `POCKET_CODEX_COMMANDS_ENABLED` | Optional | Defaults to `false`. Project-level `allow_shell=true` is also required. |
 | `POCKET_CODEX_COMMAND_TIMEOUT_SECONDS` | Optional | Timeout for `/run` and `/ssh`. Defaults to `60`. |
-| `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | Optional | Max command output saved into context. Defaults to `12000`. |
+| `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | Optional | App-level command output budget. Defaults to `0`, meaning no app-level truncation. |
 | `POCKET_CODEX_COMMAND_INLINE_MAX_CHARS` | Optional | Telegram output chunk size. Defaults to `3500`. |
 
 Project config example:
@@ -153,7 +157,7 @@ The project path is included as project metadata. Command execution is off by de
 you must set both `POCKET_CODEX_COMMANDS_ENABLED=true` and project-level
 `allow_shell=true` before `/run` or `/ssh` work. The command runner is designed for
 read-only inspection, blocks destructive operations and output redirection, and uses
-timeouts plus output truncation.
+timeouts. Long Telegram outputs are automatically split or sent as text attachments.
 
 When Codex sync is enabled, `/sessions` prefers matching Codex Desktop threads for the
 selected project path. Messages sent through Telegram are appended to the selected Codex
