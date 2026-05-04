@@ -1,0 +1,15 @@
+[
+  {
+    "id": "general",
+    "name": "General Chat",
+    "path": null,
+    "system_prompt": "General personal conversation. Answer in the user's preferred language."
+  },
+  {
+    "id": "steel_cxx",
+    "name": "steel_cxx",
+    "path": "C:/Users/boji1/Documents/steel_cxx",
+    "system_prompt": "This session is for the steel_cxx project. Keep answers practical and project-aware."
+  }
+]
+

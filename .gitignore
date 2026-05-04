@@ -1,0 +1,17 @@
+.env
+config/projects.json
+.venv/
+.conda/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+data/
+*.log
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal

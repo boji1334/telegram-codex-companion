@@ -1,0 +1,43 @@
+[project]
+name = "pocket-codex"
+version = "0.1.0"
+description = "A private Telegram companion for long-running project conversations with OpenAI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Pocket Codex Contributors" }
+]
+dependencies = [
+  "openai>=2.0.0",
+  "python-dotenv>=1.0.1",
+  "python-telegram-bot>=22.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.8.0",
+]
+
+[project.scripts]
+pocket-codex = "pocket_codex.__main__:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+  ".conda",
+  ".venv",
+  ".git",
+  ".pytest_cache",
+  ".ruff_cache",
+  "data",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
