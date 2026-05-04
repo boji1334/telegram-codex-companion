@@ -16,6 +16,8 @@ The default deployment does not need a public IP address or an exposed port.
   Telegram exchanges back to the selected rollout.
 - Bubble-style HTML history exports include embedded image thumbnails for screenshots
   you sent to Codex and generated images saved by Codex.
+- Telegram replies render common Markdown as rich text and show a live waiting timer
+  while the model is responding.
 - SQLite conversation history stored on your own machine.
 - User allowlist and first-time `/claim` setup flow.
 - OpenAI Responses API backend.

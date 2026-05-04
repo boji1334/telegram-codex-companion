@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
+import contextlib
 import logging
 import mimetypes
+from dataclasses import dataclass
 from html import escape
 from io import BytesIO
 from pathlib import Path
+from time import monotonic
 from urllib.parse import unquote, urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -24,11 +29,20 @@ from .codex_store import CodexStore
 from .config import Settings
 from .openai_responder import OpenAIResponder
 from .repository import MessageRecord, Repository
+from .telegram_format import html_to_plain_text, telegram_html_chunks
 from .text import chunk_text, compact_label
 
 logger = logging.getLogger(__name__)
 MAX_HISTORY_IMAGE_SIDE = 1280
 HISTORY_IMAGE_JPEG_QUALITY = 82
+WAIT_MESSAGE_UPDATE_SECONDS = 5
+
+
+@dataclass
+class WaitIndicator:
+    message: object
+    task: asyncio.Task
+    started_at: float
 
 
 class PocketCodexTelegramBot:
@@ -327,6 +341,11 @@ class PocketCodexTelegramBot:
 
         current_model = self._effective_model(state)
         await context.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
+        wait_indicator = await self._start_wait_indicator(
+            message,
+            context=context,
+            model=current_model,
+        )
         self.repository.append_message(
             session_id=state.session_id,
             role="user",
@@ -354,12 +373,20 @@ class PocketCodexTelegramBot:
             )
         except Exception as exc:
             logger.exception("OpenAI response failed using model %s", current_model)
+            await self._finish_wait_indicator(
+                wait_indicator,
+                f"调用失败，用时 {_elapsed_seconds(wait_indicator)} 秒",
+            )
             await message.reply_text(
                 f"这次调用失败了（{type(exc).__name__}，模型：{current_model}）。\n"
                 "我已经把详细错误写进日志；你也可以用 /model 切换模型后重试。"
             )
             return
 
+        await self._finish_wait_indicator(
+            wait_indicator,
+            f"Codex 已回复，用时 {_elapsed_seconds(wait_indicator)} 秒",
+        )
         self.repository.append_message(
             session_id=state.session_id,
             role="assistant",
@@ -371,8 +398,8 @@ class PocketCodexTelegramBot:
                 user_text=message.text,
                 assistant_text=answer,
             )
-        for chunk in chunk_text(answer):
-            await message.reply_text(chunk)
+        for chunk in telegram_html_chunks(answer):
+            await self._reply_html(message, chunk)
 
     async def _require_authorized(self, update: Update) -> bool:
         user = update.effective_user
@@ -420,6 +447,41 @@ class PocketCodexTelegramBot:
             label = f"{model}（当前）" if model == current_model else model
             buttons.append([InlineKeyboardButton(label, callback_data=f"model:{index}")])
         return InlineKeyboardMarkup(buttons)
+
+    async def _start_wait_indicator(
+        self,
+        message,
+        *,
+        context: ContextTypes.DEFAULT_TYPE,
+        model: str,
+    ) -> WaitIndicator:
+        started_at = monotonic()
+        wait_message = await message.reply_text(_wait_text(model=model, elapsed_seconds=0))
+        task = asyncio.create_task(
+            _run_wait_indicator(
+                wait_message,
+                context=context,
+                chat_id=message.chat_id,
+                model=model,
+                started_at=started_at,
+            )
+        )
+        return WaitIndicator(message=wait_message, task=task, started_at=started_at)
+
+    async def _finish_wait_indicator(self, indicator: WaitIndicator, text: str) -> None:
+        indicator.task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await indicator.task
+        with contextlib.suppress(Exception):
+            await indicator.message.edit_text(text)
+
+    @staticmethod
+    async def _reply_html(message, html: str) -> None:
+        try:
+            await message.reply_text(html, parse_mode=ParseMode.HTML)
+        except BadRequest:
+            logger.exception("Telegram HTML rendering failed; falling back to plain text.")
+            await message.reply_text(html_to_plain_text(html))
 
     async def _send_project_picker(self, update: Update) -> None:
         projects = self.repository.list_projects()
@@ -761,3 +823,31 @@ def _short_image_ref(image_ref: str) -> str:
 
 def _is_exit_text(text: str) -> bool:
     return text.strip().casefold() in {"exit", "退出", "退出对话"}
+
+
+async def _run_wait_indicator(
+    wait_message,
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    model: str,
+    started_at: float,
+) -> None:
+    while True:
+        await asyncio.sleep(WAIT_MESSAGE_UPDATE_SECONDS)
+        elapsed = int(monotonic() - started_at)
+        with contextlib.suppress(Exception):
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        try:
+            await wait_message.edit_text(_wait_text(model=model, elapsed_seconds=elapsed))
+        except BadRequest as exc:
+            if "Message is not modified" not in str(exc):
+                logger.debug("Could not update wait indicator: %s", exc)
+
+
+def _wait_text(*, model: str, elapsed_seconds: int) -> str:
+    return f"Codex 正在思考...\n已等待 {elapsed_seconds} 秒\n模型：{model}"
+
+
+def _elapsed_seconds(indicator: WaitIndicator) -> int:
+    return max(0, int(monotonic() - indicator.started_at))
