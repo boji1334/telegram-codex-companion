@@ -31,6 +31,8 @@ Telegram on iPhone
 
 ## Quick Start
 
+For a full setup walkthrough, see [docs/deployment.md](docs/deployment.md).
+
 1. Create a Telegram bot with [BotFather](https://t.me/BotFather).
 2. Install Anaconda or Miniconda.
 3. Create a project-local Conda environment:
@@ -152,6 +154,8 @@ pytest
 - Project directories are allowlisted through `config/projects.json`.
 
 See [docs/security.md](docs/security.md) and [docs/windows-startup.md](docs/windows-startup.md).
+For a complete installation and deployment walkthrough, see
+[docs/deployment.md](docs/deployment.md).
 
 ## Roadmap
 
