@@ -1,0 +1,144 @@
+# Pocket Codex
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+Pocket Codex 是一个私有 Telegram 对话助手，用来在长期项目中和 OpenAI 持续对话。
+它适合部署在一台个人常开电脑上：手机通过 Telegram 发消息，电脑轮询 Telegram，
+把会话状态保存在本地 SQLite，并调用 OpenAI API 生成回复。
+
+默认部署不需要公网 IP，也不需要开放本地端口。
+
+## 功能
+
+- 私有 Telegram Bot 入口，支持 iPhone、Android、桌面 Telegram 和 Web Telegram。
+- 通过 Telegram 内联按钮切换项目和会话。
+- 使用 SQLite 在你自己的电脑上保存对话历史。
+- 支持用户白名单和首次 `/claim` 授权流程。
+- 使用 OpenAI Responses API 作为模型后端。
+- 包含测试、lint、文档和 CI，适合发布到 GitHub。
+
+## 架构
+
+```text
+iPhone 上的 Telegram
+  -> Telegram Bot API
+  -> 运行在常开电脑上的 Pocket Codex
+  -> SQLite 本地历史记录
+  -> OpenAI Responses API
+```
+
+## 快速开始
+
+1. 通过 [BotFather](https://t.me/BotFather) 创建一个 Telegram bot。
+2. 安装 Anaconda 或 Miniconda。
+3. 创建项目本地 Conda 环境：
+
+```powershell
+conda env create -p .\.conda -f environment.yml
+.\.conda\python.exe -m pip --version
+```
+
+4. 从 `.env.example` 创建 `.env`，并填入：
+
+```env
+TELEGRAM_BOT_TOKEN=your-telegram-token
+OPENAI_API_KEY=your-openai-key
+TELEGRAM_ALLOWED_USER_IDS=your-numeric-telegram-user-id
+```
+
+5. 创建项目配置：
+
+```powershell
+Copy-Item .\config\projects.example.json .\config\projects.json
+```
+
+6. 启动 bot：
+
+```powershell
+.\.conda\python.exe -m pocket_codex --check-config
+.\.conda\python.exe -m pocket_codex
+```
+
+之后也可以用脚本启动：
+
+```powershell
+.\scripts\run-pocket-codex.ps1
+```
+
+7. 打开 Telegram，给你的 bot 发送 `/start`。
+
+## Telegram 命令
+
+- `/start` 连接已授权账号。
+- `/projects` 打开项目选择器。
+- `/sessions` 打开当前项目的会话选择器。
+- `/new Title` 在当前项目中新建会话。
+- `/rename Title` 重命名当前会话。
+- `/status` 查看当前项目、会话和模型。
+- `/whoami` 查看你的 Telegram user id。
+- `/claim token` 在配置了 `BOT_SETUP_TOKEN` 时授权当前账号。
+
+## 配置
+
+环境变量：
+
+| 名称 | 是否必需 | 说明 |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | 是 | 来自 Telegram BotFather 的 token。 |
+| `OPENAI_API_KEY` | 是 | OpenAI API key。 |
+| `TELEGRAM_ALLOWED_USER_IDS` | 推荐 | 允许使用 bot 的 Telegram user id，多个 id 用逗号分隔。 |
+| `BOT_SETUP_TOKEN` | 可选 | 首次 `/claim` 使用的私有授权 token。 |
+| `OPENAI_MODEL` | 可选 | 默认是 `gpt-5.4-mini`。 |
+| `OPENAI_STORE` | 可选 | 默认是 `false`；历史记录保存在本地 SQLite。 |
+| `POCKET_CODEX_DATA_DIR` | 可选 | 默认是 `./data`。 |
+| `POCKET_CODEX_PROJECTS_FILE` | 可选 | 默认是 `./config/projects.json`。 |
+| `MAX_HISTORY_MESSAGES` | 可选 | 默认是 `24`。 |
+
+项目配置示例：
+
+```json
+[
+  {
+    "id": "general",
+    "name": "General Chat",
+    "path": null,
+    "system_prompt": "General personal conversation. Answer in the user's preferred language."
+  },
+  {
+    "id": "steel_cxx",
+    "name": "steel_cxx",
+    "path": "C:/Users/you/Documents/steel_cxx",
+    "system_prompt": "This session is for the steel_cxx project."
+  }
+]
+```
+
+项目路径会作为项目元信息传给模型。第一版不会自动读取文件，这样安全边界更清楚。
+文件搜索和显式文件附件工具可以作为独立模块继续添加。
+
+## 开发
+
+```powershell
+python -m pip install -e ".[dev]"
+ruff check .
+pytest
+```
+
+## 安全说明
+
+- 不要提交 `.env`、API key、Telegram token 或 SQLite 数据库。
+- 单用户部署时，优先使用 `TELEGRAM_ALLOWED_USER_IDS`。
+- 如果偏好 `/claim` 流程，请使用足够长的随机 `BOT_SETUP_TOKEN`。
+- 家用部署建议保持轮询模式，除非你明确需要 webhook。
+- 项目目录通过 `config/projects.json` 白名单控制。
+
+更多内容见 [docs/security.md](docs/security.md) 和 [docs/windows-startup.md](docs/windows-startup.md)。
+
+## 路线图
+
+见 [docs/roadmap.md](docs/roadmap.md)。下一步计划是支持在白名单项目目录中显式读取文件，
+之后加入 Telegram 语音消息支持。
+
+## 发布
+
+见 [docs/github-publish.md](docs/github-publish.md)，里面有安全发布到 GitHub 的步骤。

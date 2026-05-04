@@ -1,5 +1,7 @@
 # Pocket Codex
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Pocket Codex is a private Telegram companion for long-running conversations with OpenAI.
 It is designed for a personal always-on computer: your phone talks to Telegram, your
 computer polls Telegram, stores conversation state in SQLite, and calls the OpenAI API.
