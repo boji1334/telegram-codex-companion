@@ -73,6 +73,8 @@ def test_codex_store_reads_and_appends_rollout_messages(tmp_path: Path) -> None:
     ]
     assert "user_message" in event_types
     assert "agent_message" in event_types
+    assert records[-2]["payload"]["phase"] == "final_answer"
+    assert records[-1]["payload"]["phase"] == "final_answer"
 
 
 def test_codex_store_backfills_existing_telegram_records(tmp_path: Path) -> None:

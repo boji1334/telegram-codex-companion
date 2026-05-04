@@ -227,14 +227,17 @@ def _timestamp() -> str:
 
 
 def _message_record(timestamp: str, role: str, text: str, content_type: str) -> dict:
+    payload = {
+        "type": "message",
+        "role": role,
+        "content": [{"type": content_type, "text": text}],
+    }
+    if role == "assistant":
+        payload["phase"] = "final_answer"
     return {
         "timestamp": timestamp,
         "type": "response_item",
-        "payload": {
-            "type": "message",
-            "role": role,
-            "content": [{"type": content_type, "text": text}],
-        },
+        "payload": payload,
     }
 
 
@@ -251,7 +254,7 @@ def _event_message(timestamp: str, event_type: str, text: str) -> dict:
         payload = {
             "type": "agent_message",
             "message": text,
-            "phase": "final",
+            "phase": "final_answer",
             "memory_citation": None,
         }
     else:
