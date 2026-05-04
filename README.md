@@ -83,8 +83,13 @@ You can also start it later with:
 - `/new Title` creates a new session in the current project.
 - `/rename Title` renames the current session.
 - `/status` shows the active project, session, and model.
+- `/exit` exits the current conversation so plain text messages pause instead of
+  being sent to the model.
 - `/whoami` shows your Telegram user id.
 - `/claim token` authorizes your account when `BOT_SETUP_TOKEN` is configured.
+
+Typing `exit`, `退出`, or `退出对话` as plain text has the same effect as `/exit`.
+After exiting, send `/start`, `/projects`, or `/sessions` to enter again.
 
 ## Configuration
 

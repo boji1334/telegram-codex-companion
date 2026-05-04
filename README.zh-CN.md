@@ -82,8 +82,12 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 - `/new Title` 在当前项目中新建会话。
 - `/rename Title` 重命名当前会话。
 - `/status` 查看当前项目、会话和模型。
+- `/exit` 退出当前对话，普通消息会暂停发送给模型。
 - `/whoami` 查看你的 Telegram user id。
 - `/claim token` 在配置了 `BOT_SETUP_TOKEN` 时授权当前账号。
+
+也可以直接输入 `exit`、`退出` 或 `退出对话`，效果等同于 `/exit`。退出后发送 `/start`、
+`/projects` 或 `/sessions` 可以重新进入。
 
 ## 配置
 

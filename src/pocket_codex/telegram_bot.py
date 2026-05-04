@@ -57,6 +57,7 @@ class PocketCodexTelegramBot:
         app.add_handler(CommandHandler("new", self.new_session))
         app.add_handler(CommandHandler("rename", self.rename_session))
         app.add_handler(CommandHandler("status", self.status))
+        app.add_handler(CommandHandler("exit", self.exit))
         app.add_handler(CallbackQueryHandler(self.on_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_message))
         return app
@@ -65,8 +66,11 @@ class PocketCodexTelegramBot:
         if not await self._require_authorized(update):
             return
         await self._ensure_state(update)
+        if update.effective_user is not None:
+            self.repository.set_user_active(user_id=update.effective_user.id, active=True)
         await update.effective_message.reply_text(
-            "已经连接。你可以直接发消息，或用 /projects 选择项目，用 /sessions 切换会话。"
+            "已经连接。你可以直接发消息，或用 /projects 选择项目，用 /sessions 切换会话。\n"
+            "输入 /help 可以查看所有命令；输入 exit 或 /exit 可以退出当前对话。"
         )
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -81,7 +85,9 @@ class PocketCodexTelegramBot:
                     "/new 标题 - 新建会话",
                     "/rename 标题 - 重命名当前会话",
                     "/status - 查看当前项目和会话",
+                    "/exit - 退出当前对话，普通消息会暂停发送给模型",
                     "/whoami - 查看 Telegram user id",
+                    "exit - 和 /exit 一样，可直接输入",
                 ]
             )
         )
@@ -117,11 +123,15 @@ class PocketCodexTelegramBot:
     async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
             return
+        if update.effective_user is not None:
+            self.repository.set_user_active(user_id=update.effective_user.id, active=True)
         await self._send_project_picker(update)
 
     async def sessions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
             return
+        if update.effective_user is not None:
+            self.repository.set_user_active(user_id=update.effective_user.id, active=True)
         state = await self._ensure_state(update)
         await self._send_session_picker(update, project_id=state.project_id)
 
@@ -171,6 +181,11 @@ class PocketCodexTelegramBot:
             f"已新建会话：{escape(session.title)}",
             parse_mode=ParseMode.HTML,
         )
+
+    async def exit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._require_authorized(update):
+            return
+        await self._exit_conversation(update)
 
     async def rename_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._require_authorized(update):
@@ -261,7 +276,18 @@ class PocketCodexTelegramBot:
         if message is None or user is None or not message.text:
             return
 
+        if _is_exit_text(message.text):
+            await self._exit_conversation(update)
+            return
+
         state = await self._ensure_state(update)
+        if not state.is_active:
+            await message.reply_text(
+                "当前对话已经退出，普通消息不会发送给模型。\n"
+                "发送 /start 重新进入，或 /help 查看命令。"
+            )
+            return
+
         project = self.repository.get_project(state.project_id)
         session = self.repository.get_session(state.session_id)
         if project is None:
@@ -335,6 +361,17 @@ class PocketCodexTelegramBot:
         if user is None:
             raise RuntimeError("Missing Telegram user")
         return self.repository.ensure_state(user.id)
+
+    async def _exit_conversation(self, update: Update) -> None:
+        user = update.effective_user
+        message = update.effective_message
+        if user is None or message is None:
+            return
+        self.repository.set_user_active(user_id=user.id, active=False)
+        await message.reply_text(
+            "已退出当前对话。你的会话记录还在，不会删除。\n"
+            "之后普通消息不会发送给模型；发送 /start 重新进入，或 /help 查看命令。"
+        )
 
     async def _send_project_picker(self, update: Update) -> None:
         projects = self.repository.list_projects()
@@ -672,3 +709,7 @@ def _short_image_ref(image_ref: str) -> str:
     if image_ref.startswith("data:image/"):
         return "内嵌图片数据"
     return image_ref if len(image_ref) <= 120 else f"{image_ref[:117]}..."
+
+
+def _is_exit_text(text: str) -> bool:
+    return text.strip().casefold() in {"exit", "退出", "退出对话"}

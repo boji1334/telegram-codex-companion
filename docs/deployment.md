@@ -157,6 +157,8 @@ Useful commands:
 - `/history all` sends the full HTML transcript.
 - `/projects` switches project.
 - `/sessions` switches Codex thread.
+- `/exit` exits the current conversation; plain text `exit`, `退出`, or `退出对话`
+  works too. Send `/start`, `/projects`, or `/sessions` to enter again.
 
 ## 8. Windows Always-On Setup
 

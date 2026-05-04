@@ -36,6 +36,7 @@ class MessageRecord:
 class CurrentState:
     project_id: str
     session_id: str
+    is_active: bool = True
 
 
 class Repository:
@@ -93,6 +94,7 @@ class Repository:
                   user_id INTEGER PRIMARY KEY,
                   current_project_id TEXT NOT NULL REFERENCES projects(id),
                   current_session_id TEXT NOT NULL REFERENCES sessions(id),
+                  is_active INTEGER NOT NULL DEFAULT 1,
                   updated_at TEXT NOT NULL
                 );
                 """
@@ -103,6 +105,14 @@ class Repository:
             }
             if "codex_thread_id" not in columns:
                 conn.execute("ALTER TABLE sessions ADD COLUMN codex_thread_id TEXT")
+            state_columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(user_state)").fetchall()
+            }
+            if "is_active" not in state_columns:
+                conn.execute(
+                    "ALTER TABLE user_state ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+                )
 
     def sync_projects(self, projects: Iterable[ProjectConfig]) -> None:
         now = utc_now()
@@ -179,13 +189,18 @@ class Repository:
     def ensure_state(self, user_id: int) -> CurrentState:
         with self.connect() as conn:
             state = conn.execute(
-                "SELECT current_project_id, current_session_id FROM user_state WHERE user_id = ?",
+                """
+                SELECT current_project_id, current_session_id, is_active
+                FROM user_state
+                WHERE user_id = ?
+                """,
                 (user_id,),
             ).fetchone()
             if state:
                 return CurrentState(
                     project_id=state["current_project_id"],
                     session_id=state["current_session_id"],
+                    is_active=bool(state["is_active"]),
                 )
 
             project = conn.execute(
@@ -211,8 +226,10 @@ class Repository:
             )
             conn.execute(
                 """
-                INSERT INTO user_state (user_id, current_project_id, current_session_id, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_state (
+                  user_id, current_project_id, current_session_id, is_active, updated_at
+                )
+                VALUES (?, ?, ?, 1, ?)
                 """,
                 (user_id, project["id"], session_id, now),
             )
@@ -230,7 +247,7 @@ class Repository:
                 title="New chat",
             )
         self.set_current_session(user_id=user_id, session_id=session.id)
-        return CurrentState(project_id=project_id, session_id=session.id)
+        return CurrentState(project_id=project_id, session_id=session.id, is_active=True)
 
     def create_session(self, *, user_id: int, project_id: str, title: str) -> SessionRecord:
         if self.get_project(project_id) is None:
@@ -250,11 +267,14 @@ class Repository:
             )
             conn.execute(
                 """
-                INSERT INTO user_state (user_id, current_project_id, current_session_id, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_state (
+                  user_id, current_project_id, current_session_id, is_active, updated_at
+                )
+                VALUES (?, ?, ?, 1, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                   current_project_id = excluded.current_project_id,
                   current_session_id = excluded.current_session_id,
+                  is_active = 1,
                   updated_at = excluded.updated_at
                 """,
                 (user_id, project_id, session_id, now),
@@ -309,11 +329,14 @@ class Repository:
                 )
             conn.execute(
                 """
-                INSERT INTO user_state (user_id, current_project_id, current_session_id, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_state (
+                  user_id, current_project_id, current_session_id, is_active, updated_at
+                )
+                VALUES (?, ?, ?, 1, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                   current_project_id = excluded.current_project_id,
                   current_session_id = excluded.current_session_id,
+                  is_active = 1,
                   updated_at = excluded.updated_at
                 """,
                 (user_id, project_id, session.id, now),
@@ -374,16 +397,37 @@ class Repository:
         with self.connect() as conn:
             conn.execute(
                 """
-                INSERT INTO user_state (user_id, current_project_id, current_session_id, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_state (
+                  user_id, current_project_id, current_session_id, is_active, updated_at
+                )
+                VALUES (?, ?, ?, 1, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                   current_project_id = excluded.current_project_id,
                   current_session_id = excluded.current_session_id,
+                  is_active = 1,
                   updated_at = excluded.updated_at
                 """,
                 (user_id, session.project_id, session.id, now),
             )
-        return CurrentState(project_id=session.project_id, session_id=session.id)
+        return CurrentState(project_id=session.project_id, session_id=session.id, is_active=True)
+
+    def set_user_active(self, *, user_id: int, active: bool) -> CurrentState:
+        state = self.ensure_state(user_id)
+        now = utc_now()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE user_state
+                SET is_active = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (1 if active else 0, now, user_id),
+            )
+        return CurrentState(
+            project_id=state.project_id,
+            session_id=state.session_id,
+            is_active=active,
+        )
 
     def rename_session(self, *, session_id: str, title: str) -> None:
         title = title.strip()[:120]
