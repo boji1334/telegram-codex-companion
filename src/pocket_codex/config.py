@@ -33,6 +33,8 @@ class Settings:
     allowed_user_ids: frozenset[int]
     setup_token: str | None
     max_history_messages: int
+    codex_sync_enabled: bool
+    codex_home: Path
 
 
 def load_settings() -> Settings:
@@ -61,6 +63,10 @@ def load_settings() -> Settings:
         allowed_user_ids=frozenset(_int_set_env("TELEGRAM_ALLOWED_USER_IDS")),
         setup_token=_optional("BOT_SETUP_TOKEN"),
         max_history_messages=_int_env("MAX_HISTORY_MESSAGES", default=24, minimum=4),
+        codex_sync_enabled=_bool_env("CODEX_SYNC_ENABLED", default=True),
+        codex_home=Path(
+            os.getenv("CODEX_HOME", Path.home() / ".codex")
+        ).expanduser().resolve(),
     )
     return settings
 

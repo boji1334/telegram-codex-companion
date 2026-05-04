@@ -44,9 +44,13 @@ class OpenAIResponder:
     @staticmethod
     def _instructions(*, project_name: str, project_path: str | None, project_prompt: str) -> str:
         parts = [
-            "You are a private, long-running conversation companion inside Telegram.",
+            "You are a Telegram remote client for the user's Codex Desktop conversations.",
             "Answer in the user's language unless they explicitly ask otherwise.",
             "Be concise, practical, and clear.",
+            (
+                "When prior Codex Desktop history is provided, "
+                "treat it as the same ongoing conversation."
+            ),
             f"Current project: {project_name}.",
         ]
         if project_path:
@@ -55,4 +59,3 @@ class OpenAIResponder:
         if project_prompt:
             parts.append(f"Project-specific instruction: {project_prompt}")
         return "\n".join(parts)
-

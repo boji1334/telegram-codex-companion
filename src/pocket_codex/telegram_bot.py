@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from html import escape
+from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
@@ -14,6 +15,7 @@ from telegram.ext import (
     filters,
 )
 
+from .codex_store import CodexStore
 from .config import Settings
 from .openai_responder import OpenAIResponder
 from .repository import Repository
@@ -23,10 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 class PocketCodexTelegramBot:
-    def __init__(self, *, settings: Settings, repository: Repository, responder: OpenAIResponder):
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        repository: Repository,
+        responder: OpenAIResponder,
+        codex_store: CodexStore | None = None,
+    ):
         self.settings = settings
         self.repository = repository
         self.responder = responder
+        self.codex_store = codex_store
 
     def build(self) -> Application:
         app = Application.builder().token(self.settings.telegram_bot_token).build()
@@ -59,7 +69,7 @@ class PocketCodexTelegramBot:
                 [
                     "可用命令：",
                     "/projects - 选择项目",
-                    "/sessions - 选择当前项目里的会话",
+                    "/sessions - 选择当前项目里的 Codex 桌面会话",
                     "/new 标题 - 新建会话",
                     "/rename 标题 - 重命名当前会话",
                     "/status - 查看当前项目和会话",
@@ -175,6 +185,23 @@ class PocketCodexTelegramBot:
             self.repository.set_current_session(user_id=update.effective_user.id, session_id=value)
             await query.edit_message_text(f"已切换会话：{session.title}")
             return
+        if kind == "codex":
+            thread = self.codex_store.get_thread(value) if self.codex_store else None
+            if thread is None:
+                await query.edit_message_text("这个 Codex 会话不存在或暂时无法读取。")
+                return
+            state = await self._ensure_state(update)
+            session = self.repository.get_or_create_codex_session(
+                user_id=update.effective_user.id,
+                project_id=state.project_id,
+                codex_thread_id=thread.id,
+                title=thread.title,
+            )
+            await query.edit_message_text(
+                f"已连接 Codex 会话：{session.title}\n"
+                "之后手机消息会读取并追加到这个 Codex 会话。"
+            )
+            return
         if kind == "sessions":
             await query.edit_message_text(
                 "选择会话：",
@@ -192,6 +219,7 @@ class PocketCodexTelegramBot:
 
         state = await self._ensure_state(update)
         project = self.repository.get_project(state.project_id)
+        session = self.repository.get_session(state.session_id)
         if project is None:
             await message.reply_text("当前项目不存在，请用 /projects 重新选择。")
             return
@@ -203,10 +231,16 @@ class PocketCodexTelegramBot:
             content=message.text,
         )
 
-        history = self.repository.recent_messages(
-            session_id=state.session_id,
-            limit=self.settings.max_history_messages,
-        )
+        if session and session.codex_thread_id and self.codex_store:
+            history = self.codex_store.recent_messages(
+                thread_id=session.codex_thread_id,
+                limit=self.settings.max_history_messages,
+            )
+        else:
+            history = self.repository.recent_messages(
+                session_id=state.session_id,
+                limit=self.settings.max_history_messages,
+            )
         try:
             answer = await self.responder.reply(
                 project_name=project["name"],
@@ -225,6 +259,12 @@ class PocketCodexTelegramBot:
             role="assistant",
             content=answer,
         )
+        if session and session.codex_thread_id and self.codex_store:
+            self.codex_store.append_exchange(
+                thread_id=session.codex_thread_id,
+                user_text=message.text,
+                assistant_text=answer,
+            )
         for chunk in chunk_text(answer):
             await message.reply_text(chunk)
 
@@ -270,6 +310,25 @@ class PocketCodexTelegramBot:
         )
 
     def _session_markup(self, user_id: int, project_id: str) -> InlineKeyboardMarkup:
+        project = self.repository.get_project(project_id)
+        if self.codex_store and project is not None:
+            project_path = project["path"]
+            threads = self.codex_store.list_threads_for_path(
+                Path(project_path) if project_path else None,
+            )
+            if threads:
+                return InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                compact_label(thread.title),
+                                callback_data=f"codex:{thread.id}",
+                            )
+                        ]
+                        for thread in threads
+                    ]
+                )
+
         sessions = self.repository.list_sessions(user_id=user_id, project_id=project_id)
         buttons = [
             [

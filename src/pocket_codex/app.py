@@ -2,6 +2,7 @@ import logging
 
 from telegram import Update
 
+from .codex_store import CodexStore
 from .config import load_settings
 from .openai_responder import OpenAIResponder
 from .repository import Repository
@@ -19,6 +20,7 @@ def run() -> None:
     bot = PocketCodexTelegramBot(
         settings=settings,
         repository=repository,
+        codex_store=CodexStore(settings.codex_home) if settings.codex_sync_enabled else None,
         responder=OpenAIResponder(settings),
     ).build()
 

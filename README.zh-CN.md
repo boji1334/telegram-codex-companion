@@ -12,6 +12,8 @@ Pocket Codex 是一个私有 Telegram 对话助手，用来在长期项目中和
 
 - 私有 Telegram Bot 入口，支持 iPhone、Android、桌面 Telegram 和 Web Telegram。
 - 通过 Telegram 内联按钮切换项目和会话。
+- 可选 Codex 桌面端同步：列出本机 Codex threads，读取历史，并把 Telegram
+  对话追加回选中的 rollout。
 - 使用 SQLite 在你自己的电脑上保存对话历史。
 - 支持用户白名单和首次 `/claim` 授权流程。
 - 使用 OpenAI Responses API 作为模型后端。
@@ -93,6 +95,8 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 | `POCKET_CODEX_DATA_DIR` | 可选 | 默认是 `./data`。 |
 | `POCKET_CODEX_PROJECTS_FILE` | 可选 | 默认是 `./config/projects.json`。 |
 | `MAX_HISTORY_MESSAGES` | 可选 | 默认是 `24`。 |
+| `CODEX_SYNC_ENABLED` | 可选 | 默认是 `true`。 |
+| `CODEX_HOME` | 可选 | 默认是当前用户的 `.codex` 目录。 |
 
 项目配置示例：
 
@@ -115,6 +119,10 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 
 项目路径会作为项目元信息传给模型。第一版不会自动读取文件，这样安全边界更清楚。
 文件搜索和显式文件附件工具可以作为独立模块继续添加。
+
+开启 Codex 同步后，`/sessions` 会优先列出所选项目路径匹配的 Codex 桌面端会话。
+通过 Telegram 发送的新消息会带着 `[Telegram]` 标记追加到选中的 Codex rollout 文件，
+这样桌面端恢复这条会话时可以继承手机端的上下文。
 
 ## 开发
 

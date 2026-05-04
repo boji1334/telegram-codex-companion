@@ -21,6 +21,7 @@ class SessionRecord:
     title: str
     created_at: str
     updated_at: str
+    codex_thread_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class Repository:
                   project_id TEXT NOT NULL REFERENCES projects(id),
                   title TEXT NOT NULL,
                   created_by INTEGER NOT NULL,
+                  codex_thread_id TEXT,
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
@@ -94,6 +96,12 @@ class Repository:
                 );
                 """
             )
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+            }
+            if "codex_thread_id" not in columns:
+                conn.execute("ALTER TABLE sessions ADD COLUMN codex_thread_id TEXT")
 
     def sync_projects(self, projects: Iterable[ProjectConfig]) -> None:
         now = utc_now()
@@ -232,8 +240,10 @@ class Repository:
         with self.connect() as conn:
             conn.execute(
                 """
-                INSERT INTO sessions (id, project_id, title, created_by, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (
+                  id, project_id, title, created_by, codex_thread_id, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, NULL, ?, ?)
                 """,
                 (session_id, project_id, title[:120], user_id, now, now),
             )
@@ -254,13 +264,66 @@ class Repository:
             title=title[:120],
             created_at=now,
             updated_at=now,
+            codex_thread_id=None,
         )
+
+    def get_or_create_codex_session(
+        self,
+        *,
+        user_id: int,
+        project_id: str,
+        codex_thread_id: str,
+        title: str,
+    ) -> SessionRecord:
+        now = utc_now()
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, project_id, title, created_at, updated_at, codex_thread_id
+                FROM sessions
+                WHERE created_by = ? AND codex_thread_id = ?
+                """,
+                (user_id, codex_thread_id),
+            ).fetchone()
+            if row:
+                session = _session_from_row(row)
+            else:
+                session_id = uuid.uuid4().hex
+                conn.execute(
+                    """
+                    INSERT INTO sessions (
+                      id, project_id, title, created_by, codex_thread_id, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (session_id, project_id, title[:120], user_id, codex_thread_id, now, now),
+                )
+                session = SessionRecord(
+                    id=session_id,
+                    project_id=project_id,
+                    title=title[:120],
+                    created_at=now,
+                    updated_at=now,
+                    codex_thread_id=codex_thread_id,
+                )
+            conn.execute(
+                """
+                INSERT INTO user_state (user_id, current_project_id, current_session_id, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                  current_project_id = excluded.current_project_id,
+                  current_session_id = excluded.current_session_id,
+                  updated_at = excluded.updated_at
+                """,
+                (user_id, project_id, session.id, now),
+            )
+        return session
 
     def latest_session(self, *, user_id: int, project_id: str) -> SessionRecord | None:
         with self.connect() as conn:
             row = conn.execute(
                 """
-                SELECT id, project_id, title, created_at, updated_at
+                SELECT id, project_id, title, created_at, updated_at, codex_thread_id
                 FROM sessions
                 WHERE created_by = ? AND project_id = ?
                 ORDER BY updated_at DESC
@@ -280,7 +343,7 @@ class Repository:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, project_id, title, created_at, updated_at
+                SELECT id, project_id, title, created_at, updated_at, codex_thread_id
                 FROM sessions
                 WHERE created_by = ? AND project_id = ?
                 ORDER BY updated_at DESC
@@ -294,7 +357,7 @@ class Repository:
         with self.connect() as conn:
             row = conn.execute(
                 """
-                SELECT id, project_id, title, created_at, updated_at
+                SELECT id, project_id, title, created_at, updated_at, codex_thread_id
                 FROM sessions
                 WHERE id = ?
                 """,
@@ -371,4 +434,5 @@ def _session_from_row(row: sqlite3.Row) -> SessionRecord:
         title=row["title"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        codex_thread_id=row["codex_thread_id"],
     )

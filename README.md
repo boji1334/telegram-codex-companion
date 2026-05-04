@@ -12,6 +12,8 @@ The default deployment does not need a public IP address or an exposed port.
 
 - Private Telegram Bot interface for iPhone, Android, desktop Telegram, and web Telegram.
 - Project and session switching with Telegram inline buttons.
+- Optional Codex Desktop sync: list local Codex threads, read their history, and append
+  Telegram exchanges back to the selected rollout.
 - SQLite conversation history stored on your own machine.
 - User allowlist and first-time `/claim` setup flow.
 - OpenAI Responses API backend.
@@ -93,6 +95,8 @@ Environment variables:
 | `POCKET_CODEX_DATA_DIR` | Optional | Defaults to `./data`. |
 | `POCKET_CODEX_PROJECTS_FILE` | Optional | Defaults to `./config/projects.json`. |
 | `MAX_HISTORY_MESSAGES` | Optional | Defaults to `24`. |
+| `CODEX_SYNC_ENABLED` | Optional | Defaults to `true`. |
+| `CODEX_HOME` | Optional | Defaults to the current user's `.codex` directory. |
 
 Project config example:
 
@@ -116,6 +120,11 @@ Project config example:
 The project path is included as project metadata. This first version does not read files
 automatically, which keeps the security boundary simple. File search and explicit file
 attachment tools can be added as separate modules.
+
+When Codex sync is enabled, `/sessions` prefers matching Codex Desktop threads for the
+selected project path. Messages sent through Telegram are appended to the selected Codex
+rollout file with a `[Telegram]` marker so the desktop thread can inherit the mobile
+conversation when resumed.
 
 ## Development
 
