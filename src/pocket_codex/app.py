@@ -25,4 +25,4 @@ def run() -> None:
     ).build()
 
     logger.info("Pocket Codex is running in Telegram polling mode.")
-    bot.run_polling(allowed_updates=Update.ALL_TYPES)
+    bot.run_polling(allowed_updates=Update.ALL_TYPES, bootstrap_retries=-1)

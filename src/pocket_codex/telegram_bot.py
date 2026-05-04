@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from html import escape
 from io import BytesIO
 from pathlib import Path
-from time import monotonic
 from urllib.parse import unquote, urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -42,7 +41,6 @@ WAIT_MESSAGE_UPDATE_SECONDS = 1
 class WaitIndicator:
     message: object
     task: asyncio.Task
-    started_at: float
     model: str
 
 
@@ -374,20 +372,14 @@ class PocketCodexTelegramBot:
             )
         except Exception as exc:
             logger.exception("OpenAI response failed using model %s", current_model)
-            await self._finish_wait_indicator(
-                wait_indicator,
-                f"调用失败，用时 {_elapsed_seconds(wait_indicator)} 秒",
-            )
+            await self._finish_wait_indicator(wait_indicator)
             await message.reply_text(
                 f"这次调用失败了（{type(exc).__name__}，模型：{current_model}）。\n"
                 "我已经把详细错误写进日志；你也可以用 /model 切换模型后重试。"
             )
             return
 
-        await self._finish_wait_indicator(
-            wait_indicator,
-            f"Codex 已回复，用时 {_elapsed_seconds(wait_indicator)} 秒",
-        )
+        await self._finish_wait_indicator(wait_indicator)
         self.repository.append_message(
             session_id=state.session_id,
             role="assistant",
@@ -456,25 +448,22 @@ class PocketCodexTelegramBot:
         context: ContextTypes.DEFAULT_TYPE,
         model: str,
     ) -> WaitIndicator:
-        started_at = monotonic()
-        wait_message = await message.reply_text(_wait_text(model=model, elapsed_seconds=0))
+        wait_message = await message.reply_text(_wait_text(model=model, frame=0))
         task = asyncio.create_task(
             _run_wait_indicator(
                 wait_message,
                 context=context,
                 chat_id=message.chat_id,
                 model=model,
-                started_at=started_at,
             )
         )
         return WaitIndicator(
             message=wait_message,
             task=task,
-            started_at=started_at,
             model=model,
         )
 
-    async def _finish_wait_indicator(self, indicator: WaitIndicator, text: str) -> None:
+    async def _finish_wait_indicator(self, indicator: WaitIndicator) -> None:
         indicator.task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await indicator.task
@@ -837,7 +826,6 @@ async def _run_wait_indicator(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
     model: str,
-    started_at: float,
 ) -> None:
     frame = 0
     while True:
@@ -855,7 +843,3 @@ async def _run_wait_indicator(
 def _wait_text(*, model: str, frame: int = 0) -> str:
     dots = "." * (frame + 1)
     return f"Codex 正在思考{dots}\n模型：{model}"
-
-
-def _elapsed_seconds(indicator: WaitIndicator) -> int:
-    return max(0, int(monotonic() - indicator.started_at))
