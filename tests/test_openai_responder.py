@@ -67,6 +67,36 @@ def test_reply_runs_function_tool_loop() -> None:
     assert result.tool_observations[0].command == "pwd"
 
 
+def test_reply_summarizes_after_tool_round_budget() -> None:
+    async def run_ssh(command: str) -> str:
+        return f"[Command output]\nCommand: {command}\nOutput:\nremote ok"
+
+    fake_responses = _FakeResponsesThatKeepsCallingTools()
+    responder = OpenAIResponder.__new__(OpenAIResponder)
+    responder.settings = SimpleNamespace(
+        openai_model="gpt-test",
+        openai_store=False,
+        command_tool_max_rounds=2,
+    )
+    responder.client = SimpleNamespace(responses=fake_responses)
+
+    result = asyncio.run(
+        responder.reply(
+            project_name="steel_cxx",
+            project_path="D:/code/steel_cxx",
+            project_prompt="",
+            history=[],
+            user_message="看一下服务器",
+            model="gpt-test",
+            toolbox=ProjectToolbox(run_ssh=run_ssh),
+        )
+    )
+
+    assert result.text == "基于已读取的信息总结。"
+    assert len(result.tool_observations) == 2
+    assert fake_responses.calls == 3
+
+
 class _FakeResponses:
     def __init__(self) -> None:
         self.calls = 0
@@ -91,6 +121,32 @@ class _FakeResponses:
             if isinstance(item, dict)
         )
         return SimpleNamespace(output_text="远端可以访问。", output=[])
+
+
+class _FakeResponsesThatKeepsCallingTools:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def create(self, **kwargs):
+        self.calls += 1
+        if kwargs.get("tools"):
+            return SimpleNamespace(
+                output_text="",
+                output=[
+                    _FakeFunctionCall(
+                        name="run_ssh_command",
+                        arguments=f'{{"command":"pwd #{self.calls}"}}',
+                        call_id=f"call_{self.calls}",
+                    )
+                ],
+            )
+
+        assert any(
+            item.get("role") == "system" and "No more tool calls" in item.get("content", "")
+            for item in kwargs["input"]
+            if isinstance(item, dict)
+        )
+        return SimpleNamespace(output_text="基于已读取的信息总结。", output=[])
 
 
 class _FakeFunctionCall:

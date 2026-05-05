@@ -50,6 +50,7 @@ class Settings:
     command_timeout_seconds: int
     command_output_max_chars: int
     command_inline_max_chars: int
+    command_tool_max_rounds: int
 
 
 def load_settings() -> Settings:
@@ -114,6 +115,11 @@ def load_settings() -> Settings:
             "POCKET_CODEX_COMMAND_INLINE_MAX_CHARS",
             default=3500,
             minimum=1000,
+        ),
+        command_tool_max_rounds=_int_env(
+            "POCKET_CODEX_COMMAND_TOOL_MAX_ROUNDS",
+            default=16,
+            minimum=1,
         ),
     )
     return settings

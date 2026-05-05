@@ -122,6 +122,7 @@ Copy-Item .\config\projects.example.json .\config\projects.json
 | `POCKET_CODEX_COMMAND_TIMEOUT_SECONDS` | 可选 | `/run` 和 `/ssh` 超时秒数，默认是 `60`。 |
 | `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | 可选 | 应用层命令输出预算，默认 `0` 表示不做应用层截断。 |
 | `POCKET_CODEX_COMMAND_INLINE_MAX_CHARS` | 可选 | Telegram 单条命令输出分块大小，默认是 `3500`。 |
+| `POCKET_CODEX_COMMAND_TOOL_MAX_ROUNDS` | 可选 | 普通对话自动工具调用的最大轮次，达到后会基于已读信息直接总结，默认是 `16`。 |
 
 项目配置示例：
 

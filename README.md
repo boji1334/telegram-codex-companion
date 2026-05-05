@@ -127,6 +127,7 @@ Environment variables:
 | `POCKET_CODEX_COMMAND_TIMEOUT_SECONDS` | Optional | Timeout for `/run` and `/ssh`. Defaults to `60`. |
 | `POCKET_CODEX_COMMAND_OUTPUT_MAX_CHARS` | Optional | App-level command output budget. Defaults to `0`, meaning no app-level truncation. |
 | `POCKET_CODEX_COMMAND_INLINE_MAX_CHARS` | Optional | Telegram output chunk size. Defaults to `3500`. |
+| `POCKET_CODEX_COMMAND_TOOL_MAX_ROUNDS` | Optional | Max automatic tool rounds before the bot summarizes what it already observed. Defaults to `16`. |
 
 Project config example:
 

@@ -66,8 +66,9 @@ class OpenAIResponder:
         input_messages.append({"role": "user", "content": user_message})
         tools = _function_tools(toolbox)
         observations: list[ToolObservation] = []
+        max_tool_rounds = getattr(self.settings, "command_tool_max_rounds", 16)
 
-        for _ in range(4):
+        for _ in range(max_tool_rounds):
             response_kwargs = {
                 "model": model or self.settings.openai_model,
                 "instructions": instructions,
@@ -106,8 +107,25 @@ class OpenAIResponder:
                     }
                 )
 
+        input_messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "No more tool calls are available in this turn. Answer now using "
+                    "the command outputs already provided. Do not ask the user to run "
+                    "commands manually, paste outputs, or shrink the question."
+                ),
+            }
+        )
+        response = await self.client.responses.create(
+            model=model or self.settings.openai_model,
+            instructions=instructions,
+            input=input_messages,
+            store=self.settings.openai_store,
+        )
+        text = response.output_text.strip()
         return ReplyResult(
-            text="我尝试读取项目/服务器信息，但工具调用轮次过多。请把问题缩小一点再试。",
+            text=text or "我已经读取了一部分项目/服务器信息，但这次没有生成有效总结。",
             tool_observations=tuple(observations),
         )
 
@@ -144,7 +162,9 @@ class OpenAIResponder:
                 )
                 parts.append(
                     "Use a small number of targeted read-only commands. Prefer SSH for "
-                    "remote server state when an SSH tool is available."
+                    "remote server state when an SSH tool is available. Combine related "
+                    "checks into one shell command when practical, then answer with a "
+                    "clear conclusion rather than continuing to inspect indefinitely."
                 )
             else:
                 parts.append(
